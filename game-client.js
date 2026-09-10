@@ -3291,23 +3291,17 @@ const modelCache = new Map();
 const animationCache = new Map();
 const characterAnimations = {};
 
+let characterModelTemplate = null;
+
 function loadCharacterModel(callback) {
-	const useCache = false;
-	if (useCache && modelCache.has('character')) {
-		const original = modelCache.get('character');
-		const clone = original.clone(true);
-		clone.scale.copy(original.scale);
-		clone.position.set(0, 0, 0);
-		clone.traverse(node => {
-			if (node.isSkinnedMesh && original.skeleton) {
-				node.skeleton = node.skeleton.clone();
-				node.bind(node.skeleton);
-			}
-		});
+	// Если есть шаблон - клонируем его
+	if (characterModelTemplate) {
+		const clone = THREE.SkeletonUtils.clone(characterModelTemplate);
 		callback(clone);
 		return;
 	}
 
+	// Если шаблона нет - загружаем модель
 	fbxLoader.load(
 		'models/Character_V1.fbx',
 		fbx => {
@@ -3330,10 +3324,18 @@ function loadCharacterModel(callback) {
 					child.receiveShadow = true;
 				}
 			});
-			if (useCache) modelCache.set('character', fbx);
+
+			// Сохраняем как шаблон
+			characterModelTemplate = fbx;
+			console.log('✅ Character model template saved');
 			callback(fbx);
 		},
-		undefined,
+		xhr => {
+			console.log(
+				'📥 Character model loading:',
+				((xhr.loaded / xhr.total) * 100).toFixed(2) + '%',
+			);
+		},
 		error => console.error('❌ Ошибка загрузки модели персонажа:', error),
 	);
 }
@@ -3497,6 +3499,14 @@ if (typeof socket !== 'undefined') {
 		}
 	});
 
+	socket.on('players_ready_update', data => {
+		const playersReadyEl = document.getElementById('players-ready-status');
+		if (playersReadyEl) {
+			playersReadyEl.textContent = `Игроки готовы: ${data.loadedCount}/${data.totalCount}`;
+		}
+		console.log(`📊 Players ready: ${data.loadedCount}/${data.totalCount}`);
+	});
+
 	socket.on('player_damaged', data => {
 		if (data.targetId === socket.id) {
 			playerState.health = Math.max(0, playerState.health - data.damage);
@@ -3594,44 +3604,125 @@ setInterval(() => {
 	});
 }, 1000);
 
+// ============ RESOURCE LOADING MANAGER ============
+const LoadingManager = {
+	progress: 0,
+	status: 'Инициализация...',
+	playersReady: new Map(),
+	isMultiplayer: false,
+	allPlayersReady: false,
+
+	updateUI() {
+		const progressBar = document.getElementById('loading-progress-bar');
+		const statusEl = document.getElementById('loading-status');
+		const percentageEl = document.getElementById('loading-percentage');
+		const playersReadyEl = document.getElementById('players-ready-status');
+
+		if (progressBar) progressBar.style.width = this.progress + '%';
+		if (statusEl) statusEl.textContent = this.status;
+		if (percentageEl)
+			percentageEl.textContent = Math.floor(this.progress) + '%';
+
+		if (this.isMultiplayer && playersReadyEl) {
+			const readyCount = Array.from(this.playersReady.values()).filter(
+				r => r,
+			).length;
+			const totalPlayers = this.playersReady.size;
+			playersReadyEl.textContent = `Игроки готовы: ${readyCount}/${totalPlayers}`;
+		}
+	},
+
+	setProgress(value, status) {
+		this.progress = value;
+		if (status) this.status = status;
+		this.updateUI();
+		console.log(`📊 Loading: ${Math.floor(value)}% - ${this.status}`);
+	},
+
+	hideLoadingScreen() {
+		const loadingScreen = document.getElementById('loading-screen');
+		if (loadingScreen) {
+			loadingScreen.classList.add('hidden');
+			setTimeout(() => {
+				loadingScreen.style.display = 'none';
+			}, 500);
+		}
+	},
+};
+
 // ============ ЕДИНАЯ ТОЧКА ВХОДА (Инициализация игры) ============
 async function initGame() {
 	try {
 		console.log('🔄 Запуск инициализации игры...');
 
-		// 1. Загружаем звуки
+		// Проверка на мультиплеер
+		LoadingManager.isMultiplayer =
+			typeof socket !== 'undefined' && typeof lobbyId !== 'undefined';
+
+		// 1. Загружаем звуки (0-20%)
+		LoadingManager.setProgress(0, 'Загрузка звуков...');
 		await soundSystem.initSounds();
-		console.log('✅ Звуки загружены');
+		LoadingManager.setProgress(20, 'Звуки загружены');
 
-		// 2. Безопасное подключение к сокету
-		if (typeof socket !== 'undefined' && typeof lobbyId !== 'undefined') {
-			console.log('🔌 Joining lobby room:', lobbyId);
-			socket.emit('rejoin_game', { lobbyId });
-		} else {
-			console.log(
-				'⚠️ Мультиплеер отключен (socket/lobbyId не найдены). Одиночная игра.',
-			);
-		}
+		// 2. Загрузка текстур карты (20-30%)
+		LoadingManager.setProgress(20, 'Загрузка текстур...');
+		await new Promise(resolve => {
+			let loaded = 0;
+			const textures = [wallTextureURL, floorTextureURL, ceilingTextureURL];
+			textures.forEach(url => {
+				const img = new Image();
+				img.onload = () => {
+					loaded++;
+					LoadingManager.setProgress(
+						20 + (loaded / textures.length) * 10,
+						'Загрузка текстур...',
+					);
+					if (loaded === textures.length) resolve();
+				};
+				img.onerror = () => {
+					loaded++;
+					if (loaded === textures.length) resolve();
+				};
+				img.src = url;
+			});
+		});
+		LoadingManager.setProgress(30, 'Текстуры загружены');
 
-		// 3. Загрузка анимаций в фоне
-		loadCharacterAnimations(() =>
-			console.log('✅ All character animations loaded and ready'),
-		);
+		// 3. Загрузка модели персонажа (30-45%)
+		LoadingManager.setProgress(30, 'Загрузка модели персонажа...');
+		await new Promise(resolve => {
+			loadCharacterModel(() => {
+				LoadingManager.setProgress(45, 'Модель персонажа загружена');
+				resolve();
+			});
+		});
 
-		// 3.1 Загрузка зомби для режима 3
+		// 4. Загрузка анимаций персонажа (45-60%)
+		LoadingManager.setProgress(45, 'Загрузка анимаций персонажа...');
+		await new Promise(resolve => {
+			loadCharacterAnimations(() => {
+				LoadingManager.setProgress(60, 'Анимации персонажа загружены');
+				resolve();
+			});
+		});
+
+		// 5. Загрузка зомби для режима 3 (60-90%)
 		if (gameState.selectedMap === 3) {
-			console.log('🧟 Loading zombie assets...');
-			loadZombieModel(() => {
-				console.log('✅ Zombie model loaded');
-				loadZombieAnimations(() => {
-					console.log('✅ Zombie animations loaded');
-					console.log('🧟 Spawning first wave...');
-					setTimeout(() => spawnZombieWave(), 1000);
+			LoadingManager.setProgress(60, 'Загрузка моделей зомби...');
+			await new Promise(resolve => {
+				loadZombieModel(() => {
+					LoadingManager.setProgress(75, 'Загрузка анимаций зомби...');
+					loadZombieAnimations(() => {
+						LoadingManager.setProgress(90, 'Зомби загружены');
+						resolve();
+					});
 				});
 			});
+		} else {
+			LoadingManager.setProgress(90, 'Подготовка карты...');
 		}
 
-		// 4. Построение карты
+		// 5. Построение карты
 		clearMap();
 		if (gameState.selectedMap === 1) {
 			buildMap1();
@@ -3652,26 +3743,19 @@ async function initGame() {
 			if (teamScoreEl) teamScoreEl.classList.remove('show');
 			const zombieUIEl = document.getElementById('zombie-ui');
 			if (zombieUIEl) zombieUIEl.classList.add('show');
-
-			// ВАЖНО: Сброс состояния зомби-режима
 			gameState.zombieWave = 1;
 			gameState.zombiesKilled = 0;
 			zombies.forEach(z => scene.remove(z.group));
 			zombies.length = 0;
-			console.log('🔄 Zombie mode reset: wave 1, kills 0');
 		}
-		console.log('✅ Карта построена');
 
-		// 5. Обработка ботов
+		// 6. Обработка ботов
 		if (typeof enableBots !== 'undefined' && !enableBots) {
 			targets.forEach(t => scene.remove(t.group));
 			targets.length = 0;
-			console.log('🤖 Боты отключены');
-		} else {
-			console.log('🤖 Боты включены');
 		}
 
-		// 6. Спавн игрока
+		// 7. Спавн игрока
 		const spawn = getSpawnPosition();
 		camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
 		playerState.velocity.set(0, 0, 0);
@@ -3690,14 +3774,49 @@ async function initGame() {
 		setupLightsForMap(gameState.selectedMap);
 		updateAmmoDisplay();
 
-		console.log(
-			'🎮 Игра готова! Кликните по экрану для захвата курсора и начала.',
-		);
+		// 8. Подключение к лобби и синхронизация с другими игроками
+		LoadingManager.setProgress(95, 'Ресурсы загружены');
 
-		// 7. ЗАПУСК ИГРОВОГО ЦИКЛА
-		update();
+		if (LoadingManager.isMultiplayer) {
+			// Сначала подключаемся к лобби
+			console.log('🔌 Joining lobby room:', lobbyId);
+			socket.emit('rejoin_game', { lobbyId });
+
+			// Даем время на подключение
+			await new Promise(resolve => setTimeout(resolve, 100));
+
+			// Теперь сообщаем о загрузке ресурсов
+			LoadingManager.setProgress(95, 'Ожидание других игроков...');
+			socket.emit('player_resources_loaded', { lobbyId });
+
+			// Ждем сигнал от сервера о готовности всех игроков
+			await new Promise(resolve => {
+				socket.once('all_players_ready', () => {
+					LoadingManager.allPlayersReady = true;
+					resolve();
+				});
+			});
+		}
+
+		LoadingManager.setProgress(100, 'Игра готова!');
+
+		// 9. Запуск игры
+		setTimeout(() => {
+			LoadingManager.hideLoadingScreen();
+
+			// Спавн зомби для режима 3
+			if (gameState.selectedMap === 3) {
+				setTimeout(() => spawnZombieWave(), 1000);
+			}
+
+			// ЗАПУСК ИГРОВОГО ЦИКЛА
+			update();
+
+			console.log('🎮 Игра запущена! Кликните для захвата курсора.');
+		}, 500);
 	} catch (error) {
 		console.error('❌ Критическая ошибка инициализации игры:', error);
+		LoadingManager.setProgress(0, 'Ошибка загрузки');
 	}
 }
 

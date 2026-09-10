@@ -540,9 +540,10 @@
 				showStatus(statusLobby, 'Игрок покинул лобби', 'info');
 			});
 
-			socket.on('game_starting', ({ lobby }) => {
-				// Переход к игре
-				window.location.href = `/game.html?lobby=${lobby.id}&map=${lobby.selectedMap}&team=${getMyTeam(lobby)}&bots=${lobby.enableBots}`;
+			socket.on('game_starting', ({ lobby, yourTeam }) => {
+				// Переход к игре с командой, полученной от сервера
+				const team = yourTeam || 'red';
+				window.location.href = `/game.html?lobby=${lobby.id}&map=${lobby.selectedMap}&team=${team}&bots=${lobby.enableBots}`;
 			});
 
 			socket.on('error', ({ message }) => {
