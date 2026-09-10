@@ -34,6 +34,7 @@ class Lobby {
 			name: playerName,
 			team: null,
 			ready: false,
+			resourcesLoaded: false,
 		});
 		return true;
 	}
@@ -192,10 +193,35 @@ io.on('connection', socket => {
 		}
 
 		lobby.gameStarted = true;
-		io.to(playerData.lobbyId).emit('game_starting', {
-			lobby: lobby.toJSON(),
+
+		// Сохраняем информацию о командах игроков перед очисткой
+		const playerTeams = new Map();
+		lobby.players.forEach((player, playerId) => {
+			playerTeams.set(playerId, player.team || 'red');
 		});
-		console.log(`Game starting in lobby ${playerData.lobbyId}`);
+
+		// Отправляем каждому игроку его команду индивидуально
+		lobby.players.forEach((player, playerId) => {
+			io.to(playerId).emit('game_starting', {
+				lobby: lobby.toJSON(),
+				yourTeam: player.team || 'red',
+			});
+		});
+
+		// Очищаем список игроков и их статусы загрузки при старте игры
+		// Игроки заново присоединятся через rejoin_game
+		const previousPlayers = Array.from(lobby.players.keys());
+		lobby.players.clear();
+
+		// Сохраняем команды в глобальной Map для дальнейшего использования
+		previousPlayers.forEach(playerId => {
+			const pData = players.get(playerId);
+			if (pData) {
+				pData.team = playerTeams.get(playerId);
+			}
+		});
+
+		console.log(`🎮 Game starting in lobby ${playerData.lobbyId}, cleared ${previousPlayers.length} old player entries`);
 	});
 
 	socket.on('rejoin_game', ({ lobbyId }) => {
@@ -208,9 +234,67 @@ io.on('connection', socket => {
 		socket.join(lobbyId);
 		console.log(`✅ Player ${socket.id} rejoined game room ${lobbyId}`);
 
-		// Обновляем информацию об игроке
+		// Убеждаемся, что игрок есть в lobby.players
+		if (!lobby.players.has(socket.id)) {
+			const playerData = players.get(socket.id);
+			const playerName = playerData ? playerData.name : 'Player';
+			console.log(`⚠️ Player ${socket.id} not in lobby.players, adding...`);
+			lobby.players.set(socket.id, {
+				id: socket.id,
+				name: playerName,
+				team: null,
+				ready: false,
+				resourcesLoaded: false,
+			});
+		}
+
+		// Обновляем информацию об игроке в глобальной Map
 		if (!players.has(socket.id)) {
 			players.set(socket.id, { lobbyId, name: 'Player' });
+		}
+
+		console.log(`📊 Lobby ${lobbyId} now has ${lobby.players.size} players`);
+	});
+
+	socket.on('player_resources_loaded', ({ lobbyId }) => {
+		const lobby = lobbies.get(lobbyId);
+		if (!lobby) {
+			console.log(`❌ Resources loaded: lobby ${lobbyId} not found`);
+			return;
+		}
+
+		console.log(`📦 Player ${socket.id} reports resources loaded for lobby ${lobbyId}`);
+		console.log(`📊 Lobby has ${lobby.players.size} players total`);
+
+		const player = lobby.players.get(socket.id);
+		if (!player) {
+			console.log(`❌ Player ${socket.id} not found in lobby.players!`);
+			console.log(`Available players: ${Array.from(lobby.players.keys()).join(', ')}`);
+			return;
+		}
+
+		player.resourcesLoaded = true;
+		console.log(`✅ Player ${socket.id} resources loaded`);
+
+		// Проверяем, все ли игроки загрузили ресурсы
+		const allPlayersLoaded = Array.from(lobby.players.values()).every(
+			p => p.resourcesLoaded,
+		);
+
+		// Отправляем обновление статуса всем игрокам
+		const loadedCount = Array.from(lobby.players.values()).filter(
+			p => p.resourcesLoaded,
+		).length;
+		console.log(`📊 Players ready: ${loadedCount}/${lobby.players.size}`);
+
+		io.to(lobbyId).emit('players_ready_update', {
+			loadedCount,
+			totalCount: lobby.players.size,
+		});
+
+		if (allPlayersLoaded) {
+			console.log(`🎮 All players in lobby ${lobbyId} are ready!`);
+			io.to(lobbyId).emit('all_players_ready');
 		}
 	});
 

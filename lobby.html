@@ -339,7 +339,11 @@
 				<div class="section">
 					<h2>Доступные лобби</h2>
 					<div id="lobbies-list" class="lobbies-list"></div>
-					<button class="btn btn-secondary" id="refresh-btn" style="margin-top: 15px">
+					<button
+						class="btn btn-secondary"
+						id="refresh-btn"
+						style="margin-top: 15px"
+					>
 						Обновить список
 					</button>
 				</div>
@@ -371,6 +375,10 @@
 									<div class="map-name">⚔️ Базы</div>
 									<div class="map-desc">Командный бой</div>
 								</div>
+								<div class="map-btn" data-map="3">
+									<div class="map-name">🧟 Зомби</div>
+									<div class="map-desc">Выживание</div>
+								</div>
 							</div>
 							<div class="checkbox-group">
 								<input type="checkbox" id="enable-bots" />
@@ -382,17 +390,27 @@
 							<h2>Выбор команды</h2>
 							<div class="team-selector">
 								<button class="team-btn red" data-team="red">
-									🔴 КРАСНЫЕ<br /><span style="font-size: 11px">Западная база</span>
+									🔴 КРАСНЫЕ<br /><span style="font-size: 11px"
+										>Западная база</span
+									>
 								</button>
 								<button class="team-btn blue" data-team="blue">
-									🔵 СИНИЕ<br /><span style="font-size: 11px">Восточная база</span>
+									🔵 СИНИЕ<br /><span style="font-size: 11px"
+										>Восточная база</span
+									>
 								</button>
 							</div>
 						</div>
 
 						<div class="section">
-							<button class="btn" id="start-game-btn" disabled>НАЧАТЬ ИГРУ</button>
-							<button class="btn btn-secondary" id="leave-btn" style="margin-top: 10px">
+							<button class="btn" id="start-game-btn" disabled>
+								НАЧАТЬ ИГРУ
+							</button>
+							<button
+								class="btn btn-secondary"
+								id="leave-btn"
+								style="margin-top: 10px"
+							>
 								Покинуть лобби
 							</button>
 						</div>
@@ -405,7 +423,7 @@
 		<script>
 			// Socket.IO подключение - автоматически использует текущий домен
 			const socket = io({
-				transports: ['websocket', 'polling']
+				transports: ['websocket', 'polling'],
 			});
 			let currentLobbyId = null;
 			let playerName = '';
@@ -464,7 +482,9 @@
 			document.querySelectorAll('.map-btn').forEach(btn => {
 				btn.addEventListener('click', () => {
 					if (!isHost) return;
-					document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('selected'));
+					document
+						.querySelectorAll('.map-btn')
+						.forEach(b => b.classList.remove('selected'));
 					btn.classList.add('selected');
 					const mapId = parseInt(btn.dataset.map);
 					socket.emit('set_map', { mapId });
@@ -480,7 +500,9 @@
 			// Выбор команды
 			document.querySelectorAll('.team-btn').forEach(btn => {
 				btn.addEventListener('click', () => {
-					document.querySelectorAll('.team-btn').forEach(b => b.classList.remove('selected'));
+					document
+						.querySelectorAll('.team-btn')
+						.forEach(b => b.classList.remove('selected'));
 					btn.classList.add('selected');
 					socket.emit('set_team', { team: btn.dataset.team });
 				});
@@ -518,9 +540,10 @@
 				showStatus(statusLobby, 'Игрок покинул лобби', 'info');
 			});
 
-			socket.on('game_starting', ({ lobby }) => {
-				// Переход к игре
-				window.location.href = `/game.html?lobby=${lobby.id}&map=${lobby.selectedMap}&team=${getMyTeam(lobby)}&bots=${lobby.enableBots}`;
+			socket.on('game_starting', ({ lobby, yourTeam }) => {
+				// Переход к игре с командой, полученной от сервера
+				const team = yourTeam || 'red';
+				window.location.href = `/game.html?lobby=${lobby.id}&map=${lobby.selectedMap}&team=${team}&bots=${lobby.enableBots}`;
 			});
 
 			socket.on('error', ({ message }) => {
@@ -590,7 +613,10 @@
 
 				// Обновить выбор карты
 				document.querySelectorAll('.map-btn').forEach(btn => {
-					btn.classList.toggle('selected', parseInt(btn.dataset.map) === lobby.selectedMap);
+					btn.classList.toggle(
+						'selected',
+						parseInt(btn.dataset.map) === lobby.selectedMap,
+					);
 				});
 
 				// Обновить чекбокс манекенов
@@ -599,7 +625,7 @@
 				// Кнопка старта (только для хоста)
 				if (isHost) {
 					const canStart =
-						lobby.selectedMap === 1
+						lobby.selectedMap === 1 || lobby.selectedMap === 3
 							? lobby.players.length > 0
 							: lobby.players.some(p => p.team === 'red') &&
 								lobby.players.some(p => p.team === 'blue');
@@ -612,7 +638,8 @@
 			function renderLobbiesList(lobbies) {
 				lobbiesList.innerHTML = '';
 				if (lobbies.length === 0) {
-					lobbiesList.innerHTML = '<p style="text-align:center;color:#888;">Нет доступных лобби</p>';
+					lobbiesList.innerHTML =
+						'<p style="text-align:center;color:#888;">Нет доступных лобби</p>';
 					return;
 				}
 				lobbies.forEach(lobby => {
