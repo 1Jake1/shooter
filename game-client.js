@@ -1,5 +1,5 @@
 // Получаем параметры из URL (уже определено в game.html)
-// const selectedMap, selectedTeam, enableBots уже доступны
+// const selectedMap, selectedTeam, enableBots, socket, lobbyId уже доступны
 
 const gameState = {
 	selectedMap: selectedMap,
@@ -73,8 +73,6 @@ const CONFIG = {
 	},
 };
 
-// gameState уже определен выше
-
 // ============ SOUND SYSTEM ============
 class SoundSystem {
 	constructor() {
@@ -87,136 +85,102 @@ class SoundSystem {
 		this.compressor.knee.value = 10;
 		this.compressor.ratio.value = 8;
 		this.compressor.connect(this.masterGain);
+
+		this.buffers = {};
+		this.soundsLoaded = false;
 	}
+
 	resume() {
 		if (this.ctx.state === 'suspended') this.ctx.resume();
 	}
-	playPistolShot() {
-		this.resume();
-		const t = this.ctx.currentTime;
-		const o1 = this.ctx.createOscillator(),
-			g1 = this.ctx.createGain();
-		o1.type = 'sine';
-		o1.frequency.setValueAtTime(180, t);
-		o1.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-		g1.gain.setValueAtTime(0.6, t);
-		g1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-		o1.connect(g1);
-		g1.connect(this.compressor);
-		o1.start(t);
-		o1.stop(t + 0.15);
-		const o2 = this.ctx.createOscillator(),
-			g2 = this.ctx.createGain();
-		o2.type = 'sawtooth';
-		o2.frequency.setValueAtTime(800, t);
-		o2.frequency.exponentialRampToValueAtTime(200, t + 0.06);
-		g2.gain.setValueAtTime(0.3, t);
-		g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-		o2.connect(g2);
-		g2.connect(this.compressor);
-		o2.start(t);
-		o2.stop(t + 0.08);
-		this._noiseBurst(t, 0.06, 0.5);
-		this._reverbTail(t, 0.2, 0.15);
-	}
-	playRifleShot() {
-		this.resume();
-		const t = this.ctx.currentTime;
-		const o1 = this.ctx.createOscillator(),
-			g1 = this.ctx.createGain();
-		o1.type = 'sine';
-		o1.frequency.setValueAtTime(150, t);
-		o1.frequency.exponentialRampToValueAtTime(30, t + 0.1);
-		g1.gain.setValueAtTime(0.5, t);
-		g1.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-		o1.connect(g1);
-		g1.connect(this.compressor);
-		o1.start(t);
-		o1.stop(t + 0.12);
-		const o2 = this.ctx.createOscillator(),
-			g2 = this.ctx.createGain();
-		o2.type = 'sawtooth';
-		o2.frequency.setValueAtTime(600, t);
-		o2.frequency.exponentialRampToValueAtTime(100, t + 0.05);
-		g2.gain.setValueAtTime(0.35, t);
-		g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-		o2.connect(g2);
-		g2.connect(this.compressor);
-		o2.start(t);
-		o2.stop(t + 0.07);
-		this._noiseBurst(t, 0.04, 0.55);
-		this._reverbTail(t, 0.15, 0.12);
-	}
-	playSSGShot() {
-		this.resume();
-		const t = this.ctx.currentTime;
-		const o1 = this.ctx.createOscillator(),
-			g1 = this.ctx.createGain();
-		o1.type = 'sine';
-		o1.frequency.setValueAtTime(120, t);
-		o1.frequency.exponentialRampToValueAtTime(25, t + 0.25);
-		g1.gain.setValueAtTime(0.7, t);
-		g1.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-		o1.connect(g1);
-		g1.connect(this.compressor);
-		o1.start(t);
-		o1.stop(t + 0.3);
-		const o2 = this.ctx.createOscillator(),
-			g2 = this.ctx.createGain();
-		o2.type = 'sawtooth';
-		o2.frequency.setValueAtTime(1200, t);
-		o2.frequency.exponentialRampToValueAtTime(150, t + 0.08);
-		g2.gain.setValueAtTime(0.4, t);
-		g2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-		o2.connect(g2);
-		g2.connect(this.compressor);
-		o2.start(t);
-		o2.stop(t + 0.1);
-		this._noiseBurst(t, 0.12, 0.7);
-		this._reverbTail(t, 0.5, 0.35);
-		this._click(t + 0.25, 800, 0.03, 0.2);
-	}
-	playReloadSound(weapon) {
-		this.resume();
-		const t = this.ctx.currentTime;
-		const isR = weapon === 'rifle';
-		const isS = weapon === 'ssg';
-		this._click(t, 1200, 0.02, 0.3);
-		this._click(t + 0.15, 400, 0.04, 0.2);
-		this._noiseBurst(t + 0.15, 0.03, 0.1);
-		if (isS) {
-			this._noiseBurst(t + 0.8, 0.1, 0.3);
-			this._click(t + 0.9, 600, 0.03, 0.3);
-			this._click(t + 1.5, 1000, 0.02, 0.25);
-			this._click(t + 2.2, 800, 0.03, 0.3);
-			this._noiseBurst(t + 2.5, 0.08, 0.2);
-			this._click(t + 2.8, 1200, 0.02, 0.25);
-		} else if (isR) {
-			this._click(t + 1.2, 800, 0.03, 0.35);
-			this._click(t + 1.25, 600, 0.02, 0.25);
-			this._noiseBurst(t + 1.6, 0.06, 0.2);
-			this._click(t + 1.65, 1500, 0.02, 0.3);
-			this._click(t + 1.8, 1000, 0.015, 0.2);
-		} else {
-			this._click(t + 0.9, 800, 0.03, 0.35);
-			this._click(t + 0.95, 600, 0.02, 0.25);
-			this._noiseBurst(t + 1.2, 0.06, 0.2);
-			this._click(t + 1.25, 1500, 0.02, 0.3);
-			this._click(t + 1.4, 1000, 0.015, 0.2);
+
+	async loadSound(name, url) {
+		try {
+			const response = await fetch(url);
+			const arrayBuffer = await response.arrayBuffer();
+			const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+			this.buffers[name] = audioBuffer;
+			console.log(`✅ Звук загружен: ${name}`);
+		} catch (error) {
+			console.error(`❌ Ошибка загрузки звука ${name}:`, error);
 		}
 	}
+
+	async initSounds() {
+		// Звуки выстрелов
+		await this.loadSound('pistol', 'sounds/pistol.mp3');
+		await this.loadSound('rifle', 'sounds/rifle.mp3');
+		await this.loadSound('ssg', 'sounds/ssg.mp3');
+
+		// НОВЫЕ ЗВУКИ: Перезарядка
+		await this.loadSound('reload_pistol', 'sounds/reload_pistol.mp3');
+		await this.loadSound('reload_rifle', 'sounds/reload_rifle.mp3');
+		await this.loadSound('reload_ssg', 'sounds/reload_ssg.mp3');
+
+		// НОВЫЕ ЗВУКИ: Ходьба
+		await this.loadSound('footstep', 'sounds/footstep.mp3');
+		await this.loadSound('footstep2', 'sounds/footstep2.mp3');
+
+		this.soundsLoaded = true;
+		console.log('🔊 Все основные звуки загружены');
+	}
+
+	playBuffer(name, pitchVariance = 0.05) {
+		if (!this.soundsLoaded || !this.buffers[name]) {
+			console.warn(`Звук ${name} не найден или не загружен`);
+			return;
+		}
+		this.resume();
+		const source = this.ctx.createBufferSource();
+		source.buffer = this.buffers[name];
+		if (pitchVariance > 0) {
+			source.playbackRate.value =
+				1.0 + (Math.random() * pitchVariance * 2 - pitchVariance);
+		}
+		source.connect(this.compressor);
+		source.start(0);
+	}
+
+	playPistolShot() {
+		this.playBuffer('pistol', 0.03);
+		this._reverbTail(this.ctx.currentTime, 0.15, 0.1);
+	}
+
+	playRifleShot() {
+		this.playBuffer('rifle', 0.04);
+		this._reverbTail(this.ctx.currentTime, 0.1, 0.08);
+	}
+
+	playSSGShot() {
+		this.playBuffer('ssg', 0.02);
+		this._reverbTail(this.ctx.currentTime, 0.4, 0.25);
+		this._click(this.ctx.currentTime + 0.25, 800, 0.03, 0.2);
+	}
+
+	playReloadSound(weapon) {
+		const soundMap = {
+			pistol: 'reload_pistol',
+			rifle: 'reload_rifle',
+			ssg: 'reload_ssg',
+		};
+		const soundName = soundMap[weapon] || 'reload_rifle';
+
+		this.playBuffer(soundName, 0.05);
+	}
+
 	playEmptyClick() {
 		this.resume();
 		const t = this.ctx.currentTime;
 		this._click(t, 2000, 0.015, 0.3);
 		this._click(t + 0.02, 1500, 0.01, 0.2);
 	}
+
 	playFootstep() {
-		this.resume();
-		const t = this.ctx.currentTime;
-		this._click(t, 200 + Math.random() * 100, 0.04, 0.08);
-		this._noiseBurst(t, 0.03, 0.05);
+		// Проигрываем звук шага с вариацией тона (10%),
+		// чтобы последовательные шаги не звучали как робот
+		this.playBuffer('footstep', 0.1);
 	}
+
 	playHitSound() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -232,6 +196,7 @@ class SoundSystem {
 		o.start(t);
 		o.stop(t + 0.1);
 	}
+
 	playKillSound() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -249,6 +214,7 @@ class SoundSystem {
 			o.stop(t + i * 0.06 + 0.15);
 		});
 	}
+
 	playGrenadeThrow() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -265,18 +231,21 @@ class SoundSystem {
 		o.start(t);
 		o.stop(t + 0.15);
 	}
+
 	playGrenadeBounce() {
 		this.resume();
 		const t = this.ctx.currentTime;
 		this._click(t, 300 + Math.random() * 100, 0.05, 0.25);
 		this._noiseBurst(t, 0.03, 0.15);
 	}
+
 	playGrenadePin() {
 		this.resume();
 		const t = this.ctx.currentTime;
 		this._click(t, 3000, 0.01, 0.3);
 		this._click(t + 0.02, 2500, 0.01, 0.2);
 	}
+
 	playExplosion() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -306,6 +275,7 @@ class SoundSystem {
 		this._noiseBurst(t + 0.05, 0.6, 0.4);
 		this._reverbTail(t, 1.0, 0.5);
 	}
+
 	playSmokeStart() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -326,6 +296,7 @@ class SoundSystem {
 		g.connect(this.compressor);
 		src.start(t);
 	}
+
 	playSmokeLoop() {
 		this.resume();
 		const t = this.ctx.currentTime;
@@ -346,17 +317,20 @@ class SoundSystem {
 		g.connect(this.compressor);
 		src.start(t);
 	}
+
 	playScopeIn() {
 		this.resume();
 		const t = this.ctx.currentTime;
 		this._click(t, 600, 0.03, 0.15);
 		this._click(t + 0.02, 900, 0.02, 0.1);
 	}
+
 	playScopeOut() {
 		this.resume();
 		const t = this.ctx.currentTime;
 		this._click(t, 400, 0.02, 0.12);
 	}
+
 	_click(t, freq, dur, vol) {
 		const o = this.ctx.createOscillator(),
 			g = this.ctx.createGain();
@@ -370,6 +344,7 @@ class SoundSystem {
 		o.start(t);
 		o.stop(t + dur);
 	}
+
 	_noiseBurst(t, dur, vol) {
 		const len = Math.floor(this.ctx.sampleRate * dur);
 		const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -390,6 +365,7 @@ class SoundSystem {
 		g.connect(this.compressor);
 		src.start(t);
 	}
+
 	_reverbTail(t, dur, vol) {
 		const len = Math.floor(this.ctx.sampleRate * dur);
 		const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -410,15 +386,17 @@ class SoundSystem {
 		src.start(t);
 	}
 }
+
 const soundSystem = new SoundSystem();
 
-// ============ TEXTURES ============
+// ============ TEXTURES & SCENE SETUP ============
 const wallTextureURL =
 	'https://image.qwenlm.ai/public_source/68419407-1f96-425b-8414-0fe117c8cfd4/137338be7-b6f0-4fa1-b1ff-74443c54a241.png';
 const floorTextureURL =
 	'https://image.qwenlm.ai/public_source/68419407-1f96-425b-8414-0fe117c8cfd4/11c465004-2539-4864-93b5-a5687798c7b2.png';
 const ceilingTextureURL =
 	'https://image.qwenlm.ai/public_source/68419407-1f96-425b-8414-0fe117c8cfd4/1bc635045-e83d-4be1-96f7-b9699a5e6478.png';
+
 function createTexture(url, rx, ry) {
 	const tex = new THREE.TextureLoader().load(url);
 	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -429,6 +407,7 @@ function createTexture(url, rx, ry) {
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
 scene.fog = new THREE.FogExp2(0x111111, 0.015);
+
 const camera = new THREE.PerspectiveCamera(
 	75,
 	window.innerWidth / window.innerHeight,
@@ -436,6 +415,7 @@ const camera = new THREE.PerspectiveCamera(
 	200,
 );
 camera.position.set(0, CONFIG.playerHeight, 0);
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -462,39 +442,38 @@ const pointLights = [];
 function setupLightsForMap(mapId) {
 	pointLights.forEach(l => scene.remove(l));
 	pointLights.length = 0;
-	if (mapId === 1) {
-		[
-			[0xff4444, [-15, 3, -15]],
-			[0x4488ff, [15, 3, -15]],
-			[0xff8800, [-15, 3, 15]],
-			[0x44ff44, [15, 3, 15]],
-			[0xff4444, [0, 3, -20]],
-			[0x4488ff, [0, 3, 20]],
-			[0xff8800, [-20, 3, 0]],
-			[0x44ff44, [20, 3, 0]],
-		].forEach(([c, p]) => {
-			const pl = new THREE.PointLight(c, 0.8, 20);
-			pl.position.set(...p);
-			scene.add(pl);
-			pointLights.push(pl);
-		});
-	} else {
-		[
-			[0xff4444, [-20, 3, -10]],
-			[0xff6644, [-20, 3, 10]],
-			[0xff3333, [-15, 3, 0]],
-			[0x4488ff, [20, 3, -10]],
-			[0x4466ff, [20, 3, 10]],
-			[0x3388ff, [15, 3, 0]],
-			[0xffaa44, [0, 3, -20]],
-			[0x44aaff, [0, 3, 20]],
-		].forEach(([c, p]) => {
-			const pl = new THREE.PointLight(c, 0.9, 22);
-			pl.position.set(...p);
-			scene.add(pl);
-			pointLights.push(pl);
-		});
-	}
+	const lightsConfig =
+		mapId === 1
+			? [
+					[0xff4444, [-15, 3, -15]],
+					[0x4488ff, [15, 3, -15]],
+					[0xff8800, [-15, 3, 15]],
+					[0x44ff44, [15, 3, 15]],
+					[0xff4444, [0, 3, -20]],
+					[0x4488ff, [0, 3, 20]],
+					[0xff8800, [-20, 3, 0]],
+					[0x44ff44, [20, 3, 0]],
+				]
+			: [
+					[0xff4444, [-20, 3, -10]],
+					[0xff6644, [-20, 3, 10]],
+					[0xff3333, [-15, 3, 0]],
+					[0x4488ff, [20, 3, -10]],
+					[0x4466ff, [20, 3, 10]],
+					[0x3388ff, [15, 3, 0]],
+					[0xffaa44, [0, 3, -20]],
+					[0x44aaff, [0, 3, 20]],
+				];
+	lightsConfig.forEach(([c, p]) => {
+		const pl = new THREE.PointLight(
+			c,
+			mapId === 1 ? 0.8 : 0.9,
+			mapId === 1 ? 20 : 22,
+		);
+		pl.position.set(...p);
+		scene.add(pl);
+		pointLights.push(pl);
+	});
 }
 
 const wallMat = new THREE.MeshStandardMaterial({
@@ -554,6 +533,7 @@ function clearMap() {
 	mapObjects.forEach(o => scene.remove(o));
 	mapObjects.length = 0;
 }
+
 function addWall(x, z, w, d, h) {
 	h = h || CONFIG.wallHeight;
 	const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
@@ -564,6 +544,7 @@ function addWall(x, z, w, d, h) {
 	walls.push({ mesh: m, x, z, w, d, h });
 	mapObjects.push(m);
 }
+
 function addPillar(x, z) {
 	const m = new THREE.Mesh(
 		new THREE.BoxGeometry(1, CONFIG.wallHeight, 1),
@@ -586,6 +567,7 @@ function buildMap1() {
 	floor.receiveShadow = true;
 	scene.add(floor);
 	mapObjects.push(floor);
+
 	const ceil = new THREE.Mesh(
 		new THREE.PlaneGeometry(CONFIG.mapSize, CONFIG.mapSize),
 		ceilingMat,
@@ -594,6 +576,7 @@ function buildMap1() {
 	ceil.position.y = CONFIG.wallHeight;
 	scene.add(ceil);
 	mapObjects.push(ceil);
+
 	const T = CONFIG.wallThickness,
 		S = mapHalf;
 	addWall(0, -S, CONFIG.mapSize, T);
@@ -616,6 +599,7 @@ function buildMap1() {
 	addWall(10, -20, T, 10);
 	addWall(-10, 20, T, 10);
 	addWall(10, 20, T, 10);
+
 	[
 		[-7, -7],
 		[7, -7],
@@ -663,6 +647,7 @@ function buildMap2() {
 	floor.receiveShadow = true;
 	scene.add(floor);
 	mapObjects.push(floor);
+
 	const ceil = new THREE.Mesh(
 		new THREE.PlaneGeometry(CONFIG.mapSize, CONFIG.mapSize),
 		ceilingMat,
@@ -671,6 +656,7 @@ function buildMap2() {
 	ceil.position.y = CONFIG.wallHeight;
 	scene.add(ceil);
 	mapObjects.push(ceil);
+
 	const T = CONFIG.wallThickness,
 		S = mapHalf;
 	addWall(0, -S, CONFIG.mapSize, T);
@@ -686,22 +672,26 @@ function buildMap2() {
 	addPillar(-20, -5);
 	addPillar(-20, 5);
 	addPillar(-24, 0);
+
 	const redBase = new THREE.Mesh(new THREE.PlaneGeometry(8, 14), redMat);
 	redBase.rotation.x = -Math.PI / 2;
 	redBase.position.set(-22, 0.02, 0);
 	scene.add(redBase);
 	mapObjects.push(redBase);
+
 	addWall(22, -8, 8, T);
 	addWall(22, 8, 8, T);
 	addWall(26, 0, T, 10);
 	addPillar(20, -5);
 	addPillar(20, 5);
 	addPillar(24, 0);
+
 	const blueBase = new THREE.Mesh(new THREE.PlaneGeometry(8, 14), blueMat);
 	blueBase.rotation.x = -Math.PI / 2;
 	blueBase.position.set(22, 0.02, 0);
 	scene.add(blueBase);
 	mapObjects.push(blueBase);
+
 	addWall(-8, -20, 6, T);
 	addWall(8, -20, 6, T);
 	addPillar(-12, -20);
@@ -726,6 +716,7 @@ function buildMap2() {
 	addPillar(14, -8);
 	addPillar(-14, 8);
 	addPillar(14, 8);
+
 	[
 		[0, -10],
 		[0, 10],
@@ -765,20 +756,25 @@ function createTarget(x, z, team) {
 			metalness: 0.2,
 			emissive: 0x000033,
 		});
+
 	const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 0.5), mat);
 	body.position.y = 0.9;
 	body.castShadow = true;
 	g.add(body);
+
 	const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), mat);
 	head.position.y = 2.1;
 	head.castShadow = true;
 	g.add(head);
+
 	const la = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), mat);
 	la.position.set(-0.55, 1.2, 0);
 	g.add(la);
+
 	const ra = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), mat);
 	ra.position.set(0.55, 1.2, 0);
 	g.add(ra);
+
 	g.position.set(x, 0, z);
 	scene.add(g);
 	targets.push({
@@ -1077,7 +1073,7 @@ function createSSG() {
 	);
 	boltKnob.position.set(0.055, 0.02, 0.05);
 	g.add(boltKnob);
-	// Scope
+
 	const scopeTube = new THREE.Mesh(
 		new THREE.CylinderGeometry(0.022, 0.022, 0.2, 12),
 		scopeMat,
@@ -1250,7 +1246,7 @@ weaponModels.smoke.position.set(0.2, -0.15, -0.3);
 weaponModels.smoke.rotation.set(0, 0, 0.3);
 weaponGroup.add(weaponModels.pistol);
 
-// ============ PARTICLES ============
+// ============ PARTICLES & STATE ============
 const shellCasings = [],
 	activeGrenades = [],
 	explosions = [],
@@ -1335,7 +1331,6 @@ let mouseDown = false,
 	rightMouseDown = false,
 	isLocked = false;
 
-// Захват курсора при клике
 renderer.domElement.addEventListener('click', () => {
 	if (!isLocked) {
 		renderer.domElement.requestPointerLock();
@@ -1385,25 +1380,19 @@ document.addEventListener('mousemove', e => {
 	);
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
-
-// Pointer lock управление
 document.addEventListener('pointerlockchange', () => {
 	isLocked = document.pointerLockElement === renderer.domElement;
 	document.body.classList.toggle('in-game', isLocked);
-
 	if (!isLocked && weaponAnim.isScoped) {
 		weaponAnim.isScoped = false;
-		document.getElementById('scope-overlay').classList.remove('active');
+		const scopeOverlay = document.getElementById('scope-overlay');
+		if (scopeOverlay) scopeOverlay.classList.remove('active');
 		camera.fov = 75;
 		camera.updateProjectionMatrix();
 	}
 });
-
-// ESC для выхода
 document.addEventListener('keydown', e => {
-	if (e.code === 'Escape' && isLocked) {
-		document.exitPointerLock();
-	}
+	if (e.code === 'Escape' && isLocked) document.exitPointerLock();
 });
 
 function switchWeapon(name) {
@@ -1412,7 +1401,8 @@ function switchWeapon(name) {
 	if (weaponAnim.throwProgress >= 0) return;
 	if (weaponAnim.isScoped) {
 		weaponAnim.isScoped = false;
-		document.getElementById('scope-overlay').classList.remove('active');
+		const scopeOverlay = document.getElementById('scope-overlay');
+		if (scopeOverlay) scopeOverlay.classList.remove('active');
 		camera.fov = 75;
 		camera.updateProjectionMatrix();
 	}
@@ -1423,9 +1413,10 @@ function switchWeapon(name) {
 	weaponAnim.recoilX = 0;
 	weaponAnim.recoilY = 0;
 	weaponAnim.switchProgress = 0;
-	['slot-1', 'slot-2', 'slot-3', 'slot-4', 'slot-5'].forEach(id =>
-		document.getElementById(id).classList.remove('active'),
-	);
+	['slot-1', 'slot-2', 'slot-3', 'slot-4', 'slot-5'].forEach(id => {
+		const el = document.getElementById(id);
+		if (el) el.classList.remove('active');
+	});
 	const slotMap = {
 		pistol: 'slot-1',
 		rifle: 'slot-2',
@@ -1433,7 +1424,9 @@ function switchWeapon(name) {
 		frag: 'slot-4',
 		smoke: 'slot-5',
 	};
-	document.getElementById(slotMap[name]).classList.add('active');
+	const slotEl = document.getElementById(slotMap[name]);
+	if (slotEl) slotEl.classList.add('active');
+
 	const nameMap = {
 		pistol: 'ПИСТОЛЕТ',
 		rifle: 'АВТОМАТ',
@@ -1441,7 +1434,8 @@ function switchWeapon(name) {
 		frag: 'ОСКОЛОЧНАЯ',
 		smoke: 'ДЫМОВАЯ',
 	};
-	document.getElementById('weapon-name').textContent = nameMap[name];
+	const nameEl = document.getElementById('weapon-name');
+	if (nameEl) nameEl.textContent = nameMap[name];
 	updateAmmoDisplay();
 }
 
@@ -1509,26 +1503,27 @@ function spawnGrenade(type) {
 		age: 0,
 		bounces: 0,
 		pinPulled: true,
-		isLocal: true, // Помечаем как нашу гранату
+		isLocal: true,
 	};
-
 	activeGrenades.push(grenadeData);
 
-	// Отправляем информацию о броске другим игрокам
-	socket.emit('grenade_thrown', {
-		type: type,
-		position: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
-		velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
-		fuseTime: cfg.fuseTime,
-	});
+	if (typeof socket !== 'undefined') {
+		socket.emit('grenade_thrown', {
+			type: type,
+			position: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
+			velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+			fuseTime: cfg.fuseTime,
+		});
+	}
 }
 
 function updateAmmoDisplay() {
 	const ws = weaponState[currentWeapon];
 	if (ws) {
-		document.getElementById('ammo-current').textContent = ws.ammo;
-		document.getElementById('ammo-reserve').textContent =
-			ws.reserve === Infinity ? '∞' : ws.reserve;
+		const curEl = document.getElementById('ammo-current');
+		const resEl = document.getElementById('ammo-reserve');
+		if (curEl) curEl.textContent = ws.ammo;
+		if (resEl) resEl.textContent = ws.reserve === Infinity ? '∞' : ws.reserve;
 	}
 }
 
@@ -1603,21 +1598,20 @@ function updateGrenades(dt) {
 			if (g.type === 'frag') detonateFrag(explosionPos);
 			else activateSmoke(explosionPos);
 
-			// Отправляем событие взрыва только для наших гранат
-			if (g.isLocal) {
+			if (g.isLocal && typeof socket !== 'undefined') {
 				socket.emit('grenade_exploded', {
 					type: g.type,
 					position: { x: explosionPos.x, y: explosionPos.y, z: explosionPos.z },
 				});
 			}
-
 			scene.remove(g.mesh);
 			activeGrenades.splice(i, 1);
 		}
-		if (g.type === 'frag' && g.age > g.fuseTime - 0.5)
+		if (g.type === 'frag' && g.age > g.fuseTime - 0.5) {
 			g.mesh.children[0].material.emissive.setHex(
 				Math.sin(g.age * 30) > 0 ? 0xff2200 : 0x000000,
 			);
+		}
 	}
 }
 
@@ -1771,10 +1765,11 @@ function updateSmokeClouds(dt) {
 			p.mesh.scale.setScalar(1 + cloud.age * 0.05);
 		});
 		const camPos = camera.position;
-		const dx = camPos.x - cloud.position.x,
-			dy = camPos.y - cloud.position.y,
-			dz = camPos.z - cloud.position.z;
-		const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		const dist = Math.sqrt(
+			(camPos.x - cloud.position.x) ** 2 +
+				(camPos.y - cloud.position.y) ** 2 +
+				(camPos.z - cloud.position.z) ** 2,
+		);
 		if (
 			dist < cloud.maxRadius &&
 			cloud.age > 1 &&
@@ -1788,7 +1783,7 @@ function updateSmokeClouds(dt) {
 			smokeClouds.splice(i, 1);
 		}
 	}
-	smokeOverlay.style.opacity = maxSmokeIntensity * 0.92;
+	if (smokeOverlay) smokeOverlay.style.opacity = maxSmokeIntensity * 0.92;
 }
 
 let cameraShake = 0;
@@ -1894,6 +1889,7 @@ function shoot() {
 	if (currentWeapon === 'pistol') soundSystem.playPistolShot();
 	else if (currentWeapon === 'rifle') soundSystem.playRifleShot();
 	else if (currentWeapon === 'ssg') soundSystem.playSSGShot();
+
 	let spread = cfg.spread;
 	if (weaponAnim.isScoped) spread *= 0.1;
 	const spreadX = (Math.random() - 0.5) * spread,
@@ -1905,7 +1901,6 @@ function shoot() {
 	let hitTarget = false;
 	const targetMeshes = [];
 
-	// Добавляем манекены
 	targets.forEach(t => {
 		if (!t.alive) return;
 		t.group.traverse(child => {
@@ -1914,7 +1909,6 @@ function shoot() {
 		});
 	});
 
-	// Добавляем других игроков
 	otherPlayers.forEach((player, playerId) => {
 		player.group.traverse(child => {
 			if (child.isMesh)
@@ -1934,28 +1928,19 @@ function shoot() {
 		const td = targetMeshes.find(tm => tm.mesh === intersects[0].object);
 		if (td) {
 			if (td.type === 'player') {
-				// Попадание в другого игрока
 				let dmg = cfg.damage;
 				const hitPoint = intersects[0].point;
-
-				// Проверка попадания в голову (примерная)
-				if (hitPoint.y > td.player.group.position.y + 1.5) {
-					dmg *= 1.5; // Множитель урона в голову
-				}
-
+				if (hitPoint.y > td.player.group.position.y + 1.5) dmg *= 1.5;
 				soundSystem.playHitSound();
-
-				// Отправляем информацию о попадании на сервер
-				socket.emit('player_hit', {
-					targetId: td.playerId,
-					damage: dmg,
-					position: hitPoint,
-				});
-
+				if (typeof socket !== 'undefined') {
+					socket.emit('player_hit', {
+						targetId: td.playerId,
+						damage: dmg,
+						position: hitPoint,
+					});
+				}
 				hitTarget = true;
-				console.log(`💥 Hit player ${td.playerId} for ${dmg} damage`);
 			} else if (td.type === 'bot') {
-				// Попадание в манекен (старый код)
 				const t = td.target;
 				let dmg = cfg.damage;
 				const hitPoint = intersects[0].point;
@@ -1982,8 +1967,8 @@ function shoot() {
 						updateTeamScores();
 					}
 					playerState.score += pts;
-					document.getElementById('score-value').textContent =
-						playerState.score;
+					const scoreEl = document.getElementById('score-value');
+					if (scoreEl) scoreEl.textContent = playerState.score;
 					soundSystem.playKillSound();
 					t.group.rotation.x = -Math.PI / 2;
 					t.group.position.y = 0.3;
@@ -2006,24 +1991,27 @@ function shoot() {
 	if (
 		wallIntersects.length > 0 &&
 		(!intersects.length || wallIntersects[0].distance < intersects[0].distance)
-	)
+	) {
 		createImpactSpark(wallIntersects[0].point, wallIntersects[0].face.normal);
+	}
 	createBulletTrail(
 		camera.position.clone().add(dir.clone().multiplyScalar(0.5)),
 		dir,
 	);
 	if (hitTarget) {
 		const hm = document.getElementById('hit-marker');
-		hm.classList.add('show');
-		setTimeout(() => hm.classList.remove('show'), 150);
+		if (hm) {
+			hm.classList.add('show');
+			setTimeout(() => hm.classList.remove('show'), 150);
+		}
 	}
 }
 
 function updateTeamScores() {
-	document.getElementById('red-score-val').textContent =
-		gameState.teamScores.red;
-	document.getElementById('blue-score-val').textContent =
-		gameState.teamScores.blue;
+	const redEl = document.getElementById('red-score-val');
+	const blueEl = document.getElementById('blue-score-val');
+	if (redEl) redEl.textContent = gameState.teamScores.red;
+	if (blueEl) blueEl.textContent = gameState.teamScores.blue;
 }
 
 function reload() {
@@ -2032,14 +2020,17 @@ function reload() {
 	if (ws.reloading || ws.ammo === cfg.magSize) return;
 	if (weaponAnim.isScoped) {
 		weaponAnim.isScoped = false;
-		document.getElementById('scope-overlay').classList.remove('active');
+		const scopeOverlay = document.getElementById('scope-overlay');
+		if (scopeOverlay) scopeOverlay.classList.remove('active');
 		camera.fov = defaultFOV;
 		camera.updateProjectionMatrix();
 	}
 	ws.reloading = true;
 	weaponAnim.reloadProgress = 0;
-	document.getElementById('reload-text').classList.add('show');
-	document.getElementById('reload-bar-container').classList.add('show');
+	const reloadText = document.getElementById('reload-text');
+	const reloadBarContainer = document.getElementById('reload-bar-container');
+	if (reloadText) reloadText.classList.add('show');
+	if (reloadBarContainer) reloadBarContainer.classList.add('show');
 	soundSystem.playReloadSound(currentWeapon);
 	const startTime = performance.now();
 	function updateReload() {
@@ -2051,15 +2042,16 @@ function reload() {
 		const elapsed = performance.now() - startTime;
 		const progress = Math.min(elapsed / cfg.reloadTime, 1);
 		weaponAnim.reloadProgress = progress;
-		document.getElementById('reload-bar').style.width = progress * 100 + '%';
+		const reloadBar = document.getElementById('reload-bar');
+		if (reloadBar) reloadBar.style.width = progress * 100 + '%';
 		if (progress < 1) requestAnimationFrame(updateReload);
 		else {
 			ws.ammo = cfg.magSize;
 			ws.reloading = false;
 			weaponAnim.reloadProgress = -1;
-			document.getElementById('reload-text').classList.remove('show');
-			document.getElementById('reload-bar-container').classList.remove('show');
-			document.getElementById('reload-bar').style.width = '0%';
+			if (reloadText) reloadText.classList.remove('show');
+			if (reloadBarContainer) reloadBarContainer.classList.remove('show');
+			if (reloadBar) reloadBar.style.width = '0%';
 			updateAmmoDisplay();
 		}
 	}
@@ -2084,8 +2076,10 @@ function checkCollision(newX, newZ) {
 }
 
 const minimapCanvas = document.getElementById('minimap-canvas');
-const minimapCtx = minimapCanvas.getContext('2d');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+
 function drawMinimap() {
+	if (!minimapCtx) return;
 	const ctx = minimapCtx;
 	const w = 150,
 		h = 150;
@@ -2120,9 +2114,8 @@ function drawMinimap() {
 		);
 	});
 
-	// Рисуем других игроков на миникарте
 	otherPlayers.forEach(player => {
-		ctx.fillStyle = '#ffff00'; // Желтый цвет для других игроков
+		ctx.fillStyle = '#ffff00';
 		ctx.beginPath();
 		ctx.arc(
 			(player.group.position.x + mapHalf) * scale,
@@ -2226,7 +2219,6 @@ function update() {
 	camera.rotation.y = playerState.yaw;
 	camera.rotation.x = playerState.pitch;
 
-	// FOV zoom
 	const targetFOV = weaponAnim.isScoped
 		? defaultFOV / CONFIG.weapons.ssg.zoom
 		: defaultFOV;
@@ -2236,11 +2228,11 @@ function update() {
 	const scopeOverlay = document.getElementById('scope-overlay');
 	const crosshair = document.getElementById('crosshair');
 	if (weaponAnim.isScoped) {
-		scopeOverlay.classList.add('active');
-		crosshair.classList.add('hidden');
+		if (scopeOverlay) scopeOverlay.classList.add('active');
+		if (crosshair) crosshair.classList.add('hidden');
 	} else {
-		scopeOverlay.classList.remove('active');
-		crosshair.classList.remove('hidden');
+		if (scopeOverlay) scopeOverlay.classList.remove('active');
+		if (crosshair) crosshair.classList.remove('hidden');
 	}
 
 	const forward = new THREE.Vector3(
@@ -2259,6 +2251,7 @@ function update() {
 	if (keys['KeyA']) moveDir.sub(right);
 	if (keys['KeyD']) moveDir.add(right);
 	if (moveDir.length() > 0) moveDir.normalize();
+
 	let speed = keys['ShiftLeft'] ? CONFIG.sprintSpeed : CONFIG.moveSpeed;
 	if (weaponAnim.isScoped) speed *= 0.4;
 	const isMoving = moveDir.length() > 0;
@@ -2285,14 +2278,15 @@ function update() {
 		}
 	}
 
-	document
-		.getElementById('throw-indicator')
-		.classList.toggle(
+	const throwIndicator = document.getElementById('throw-indicator');
+	if (throwIndicator) {
+		throwIndicator.classList.toggle(
 			'show',
 			currentWeapon === 'frag' || currentWeapon === 'smoke',
 		);
+	}
 
-	// ============ WEAPON ANIMATION ============
+	// WEAPON ANIMATION
 	const currentModel = weaponModels[currentWeapon];
 	const basePos = {
 		pistol: { x: 0.25, y: -0.22, z: -0.4 },
@@ -2307,7 +2301,6 @@ function update() {
 		weaponAnim.bobAmount = Math.min(weaponAnim.bobAmount + dt * 5, 1);
 	} else weaponAnim.bobAmount *= 0.92;
 
-	// При прицеливании - убираем bob и sway полностью
 	const scopeActive = currentWeapon === 'ssg' && weaponAnim.scopeProgress > 0.3;
 	const bobX = scopeActive
 		? 0
@@ -2432,33 +2425,23 @@ function update() {
 		}
 	}
 
-	// ===== SSG SCOPE: сдвигаем оружие вправо-вниз и делаем невидимым =====
 	let scopeOffsetX = 0,
 		scopeOffsetY = 0,
 		scopeOffsetZ = 0;
 	let ssgOpacity = 1;
-
 	if (currentWeapon === 'ssg') {
 		const scopeT = weaponAnim.isScoped ? 1 : 0;
 		weaponAnim.scopeProgress += (scopeT - weaponAnim.scopeProgress) * 0.15;
 		const sp = weaponAnim.scopeProgress;
-
-		// Сдвигаем оружие вправо, чтобы оно не перекрывало центр экрана
-		// basePos.x = 0.22, нужно сдвинуть на -0.22 чтобы убрать от центра + ещё вправо
 		scopeOffsetX = -basePos.x * sp;
-		// Опускаем вниз
 		scopeOffsetY = -0.15 * sp;
-		// Отводим немного назад
 		scopeOffsetZ = 0.05 * sp;
-
-		// Прозрачность: начинаем скрывать при sp > 0.4, полностью скрыт при sp >= 0.85
 		if (sp > 0.4) {
 			ssgOpacity = 1.0 - (sp - 0.4) / 0.45;
 			ssgOpacity = Math.max(0, Math.min(1, ssgOpacity));
 		}
 	}
 
-	// Применяем прозрачность к SSG
 	if (currentWeapon === 'ssg') {
 		weaponModels.ssg.traverse(child => {
 			if (child.isMesh && child.material) {
@@ -2626,14 +2609,14 @@ function update() {
 									(gameState.selectedTeam === 'red' && tgt.team === 'blue') ||
 									(gameState.selectedTeam === 'blue' && tgt.team === 'red') ||
 									tgt.team === 'neutral'
-								)
+								) {
 									gameState.teamScores[gameState.selectedTeam]++;
-								else pts = 0;
+								} else pts = 0;
 								updateTeamScores();
 							}
 							playerState.score += pts;
-							document.getElementById('score-value').textContent =
-								playerState.score;
+							const scoreEl = document.getElementById('score-value');
+							if (scoreEl) scoreEl.textContent = playerState.score;
 							soundSystem.playKillSound();
 							tgt.group.rotation.x = -Math.PI / 2;
 							tgt.group.position.y = 0.3;
@@ -2658,17 +2641,13 @@ function update() {
 					const dmg =
 						CONFIG.grenades.frag.blastDamage * (1 - pdist / e.radius) * 0.3;
 					playerState.health = Math.max(0, playerState.health - dmg);
-					document.getElementById('health-value').textContent = Math.round(
-						playerState.health,
-					);
-					document.getElementById('damage-overlay').classList.add('show');
-					setTimeout(
-						() =>
-							document
-								.getElementById('damage-overlay')
-								.classList.remove('show'),
-						300,
-					);
+					const healthEl = document.getElementById('health-value');
+					if (healthEl) healthEl.textContent = Math.round(playerState.health);
+					const damageOverlay = document.getElementById('damage-overlay');
+					if (damageOverlay) {
+						damageOverlay.classList.add('show');
+						setTimeout(() => damageOverlay.classList.remove('show'), 300);
+					}
 				}
 			}
 			if (e.age >= e.maxAge) {
@@ -2682,27 +2661,18 @@ function update() {
 
 	updateSmokeClouds(dt);
 
-	// Интерполяция позиций других игроков для плавного движения
 	otherPlayers.forEach(player => {
 		if (player.targetPosition) {
-			// Плавная интерполяция к целевой позиции (lerp с коэффициентом 0.2)
 			player.group.position.lerp(player.targetPosition, 0.2);
-
-			// Плавная интерполяция поворота
 			if (player.targetRotation !== undefined) {
 				const currentRot = player.group.rotation.y;
 				let targetRot = player.targetRotation;
-
-				// Обработка перехода через 2π для корректной интерполяции
 				let diff = targetRot - currentRot;
 				if (diff > Math.PI) diff -= Math.PI * 2;
 				if (diff < -Math.PI) diff += Math.PI * 2;
-
 				player.group.rotation.y = currentRot + diff * 0.2;
 			}
 		}
-
-		// Обновление анимаций
 		if (player.group.userData.mixer) {
 			player.group.userData.mixer.update(dt);
 		}
@@ -2725,11 +2695,7 @@ function update() {
 
 	drawMinimap();
 
-	// Отправка позиции другим игрокам
-	if (isLocked) {
-		sendPosition();
-	}
-
+	if (isLocked) sendPosition();
 	renderer.render(scene, camera);
 }
 
@@ -2739,47 +2705,26 @@ window.addEventListener('resize', () => {
 	renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-buildMap1();
-setupLightsForMap(1);
-updateAmmoDisplay();
-
 // ============ MULTIPLAYER SYNC ============
-const otherPlayers = new Map(); // playerId -> player object
-
-// Присоединяемся к комнате лобби при загрузке игры
-console.log('🔌 Joining lobby room:', lobbyId);
-socket.emit('rejoin_game', { lobbyId });
-
-// ============ MODEL & ANIMATION SYSTEM ============
+const otherPlayers = new Map();
 const fbxLoader = new THREE.FBXLoader();
 const modelCache = new Map();
 const animationCache = new Map();
+const characterAnimations = {};
 
-// Загрузка модели персонажа
 function loadCharacterModel(callback) {
-	// ВРЕМЕННО: отключаем кеширование для отладки
-	// Каждый игрок загружает свою модель заново
 	const useCache = false;
-
 	if (useCache && modelCache.has('character')) {
 		const original = modelCache.get('character');
-		// Используем глубокое клонирование с копированием скелета
-		const clone = original.clone(true); // true = рекурсивное клонирование
-
-		// Важно: копируем масштаб, но НЕ позицию
+		const clone = original.clone(true);
 		clone.scale.copy(original.scale);
 		clone.position.set(0, 0, 0);
-
-		// Если есть скелет, клонируем его отдельно
-		clone.traverse((node) => {
+		clone.traverse(node => {
 			if (node.isSkinnedMesh && original.skeleton) {
-				// Создаём новый скелет для клона
 				node.skeleton = node.skeleton.clone();
 				node.bind(node.skeleton);
 			}
 		});
-
-		console.log('🔄 Created clone from cache');
 		callback(clone);
 		return;
 	}
@@ -2787,57 +2732,33 @@ function loadCharacterModel(callback) {
 	fbxLoader.load(
 		'models/Character_V1.fbx',
 		fbx => {
-			// Вычисляем исходный размер модели до трансформаций
 			const box = new THREE.Box3().setFromObject(fbx);
 			const size = new THREE.Vector3();
 			box.getSize(size);
-
-			// Задаем целевую высоту
 			const targetHeight = 1.65;
-
-			// Вычисляем коэффициент масштабирования
-			const scale = size.y > 0 ? targetHeight / size.y : 0.01;
-
-			// Применяем масштаб
+			const scale = size.y > 0 ? (targetHeight / size.y) * 1.32 : 0.01;
 			fbx.scale.setScalar(scale);
-
-			// Пересчитываем границы после масштабирования
 			const scaledBox = new THREE.Box3().setFromObject(fbx);
 			const center = new THREE.Vector3();
 			scaledBox.getCenter(center);
-
-			// Центрируем модель по осям X и Z
 			fbx.position.x -= center.x;
 			fbx.position.z -= center.z;
-
-			// Поднимаем модель так, чтобы ноги были на Y = 0
 			const finalBox = new THREE.Box3().setFromObject(fbx);
 			fbx.position.y -= finalBox.min.y;
-
 			fbx.traverse(child => {
 				if (child.isMesh) {
 					child.castShadow = true;
 					child.receiveShadow = true;
 				}
 			});
-
-			// НЕ сохраняем в кеш при отключенном кешировании
-			if (useCache) {
-				modelCache.set('character', fbx);
-			}
-
-			// ВАЖНО: НЕ клонируем! Отдаём саму модель
+			if (useCache) modelCache.set('character', fbx);
 			callback(fbx);
 		},
 		undefined,
-		error => {
-			console.error('❌ Ошибка загрузки модели персонажа:', error);
-		},
+		error => console.error('❌ Ошибка загрузки модели персонажа:', error),
 	);
 }
 
-// Загрузка анимаций персонажа
-const characterAnimations = {};
 function loadCharacterAnimations(callback) {
 	let loaded = 0;
 	const animFiles = {
@@ -2853,14 +2774,12 @@ function loadCharacterAnimations(callback) {
 			if (loaded === Object.keys(animFiles).length) callback();
 			return;
 		}
-
 		fbxLoader.load(
 			animFiles[key],
 			fbx => {
 				if (fbx.animations && fbx.animations.length > 0) {
 					characterAnimations[key] = fbx.animations[0];
 					animationCache.set(key, fbx.animations[0]);
-					console.log(`✅ Animation loaded: ${key}`);
 				}
 				loaded++;
 				if (loaded === Object.keys(animFiles).length) callback();
@@ -2875,58 +2794,38 @@ function loadCharacterAnimations(callback) {
 	});
 }
 
-// Инициализация анимаций при старте
-console.log('🎬 Loading character animations...');
-loadCharacterAnimations(() => {
-	console.log('✅ All animations loaded and ready');
-});
-
-// Создаем модель другого игрока с анимациями
 function createPlayerModel(playerId, team, initialX, initialZ, initialYaw) {
 	const g = new THREE.Group();
 	const color =
 		team === 'red' ? 0xff4444 : team === 'blue' ? 0x4488ff : 0x44ff44;
 
-	// Устанавливаем начальную позицию СРАЗУ, до загрузки модели
 	if (initialX !== undefined && initialZ !== undefined) {
 		g.position.set(initialX, 0, initialZ);
-		if (initialYaw !== undefined) {
-			g.rotation.y = initialYaw;
-		}
+		if (initialYaw !== undefined) g.rotation.y = initialYaw;
 	}
 
-	// Загружаем FBX модель
 	loadCharacterModel(model => {
-		// Центрируем модель по Y (ноги на земле)
 		const box = new THREE.Box3().setFromObject(model);
-		const size = new THREE.Vector3();
-		box.getSize(size);
-
-		// Смещаем модель так, чтобы ноги были на Y=0
 		model.position.y = -box.min.y;
-
+		model.rotation.y = Math.PI;
 		model.traverse(child => {
 			if (child.isMesh && child.material) {
 				child.material = child.material.clone();
-				child.material.color.setHex(color);
-				child.material.emissive.setHex(color);
+				//colorize by team
+				// child.material.color.setHex(color);
+				// child.material.emissive.setHex(color);
 				child.material.emissiveIntensity = 0.2;
 			}
 		});
-
 		g.add(model);
-
-		// Создаем AnimationMixer для анимаций
 		const mixer = new THREE.AnimationMixer(model);
 		g.userData.mixer = mixer;
 		g.userData.animations = {};
 
-		// Загружаем и настраиваем анимации
 		if (Object.keys(characterAnimations).length > 0) {
 			Object.keys(characterAnimations).forEach(key => {
 				const action = mixer.clipAction(characterAnimations[key]);
 				g.userData.animations[key] = action;
-
 				if (key === 'idle') {
 					action.play();
 					g.userData.currentAnimation = 'idle';
@@ -2935,14 +2834,7 @@ function createPlayerModel(playerId, team, initialX, initialZ, initialYaw) {
 		}
 	});
 
-	// Ставим на землю
-	g.position.set(0, 0, 0);
-
-	// Добавляем в сцену
 	scene.add(g);
-
-	console.log('✅ Player model created and added to scene');
-
 	return {
 		group: g,
 		playerId: playerId,
@@ -2951,33 +2843,24 @@ function createPlayerModel(playerId, team, initialX, initialZ, initialYaw) {
 	};
 }
 
-// Функция переключения анимаций
 function playAnimation(player, animName) {
 	if (!player.group.userData.mixer || !player.group.userData.animations) return;
-
 	const animations = player.group.userData.animations;
 	const newAnim = animations[animName];
-
 	if (!newAnim || player.currentAnimation === animName) return;
-
-	// Останавливаем текущую анимацию
 	if (player.currentAnimation && animations[player.currentAnimation]) {
 		animations[player.currentAnimation].fadeOut(0.2);
 	}
-
-	// Запускаем новую анимацию
 	newAnim.reset().fadeIn(0.2).play();
 	player.currentAnimation = animName;
 }
 
-// Отправка позиции каждые 50ms
 let lastPositionSend = 0;
 function sendPosition() {
 	const now = Date.now();
 	if (now - lastPositionSend < 50) return;
 	lastPositionSend = now;
 
-	// Определяем текущую анимацию по действиям игрока
 	let currentAnim = 'idle';
 	const isMoving = keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'];
 	const isShooting =
@@ -2986,275 +2869,232 @@ function sendPosition() {
 			currentWeapon === 'rifle' ||
 			currentWeapon === 'ssg');
 
-	if (isShooting) {
-		currentAnim = 'shoot';
-	} else if (isMoving) {
-		currentAnim = 'run';
-	}
+	if (isShooting) currentAnim = 'shoot';
+	else if (isMoving) currentAnim = 'run';
 
-	const posData = {
-		x: camera.position.x,
-		y: camera.position.y,
-		z: camera.position.z,
-		yaw: playerState.yaw,
-		pitch: playerState.pitch,
-		health: playerState.health,
-		animation: currentAnim,
-	};
-
-	socket.emit('player_position', posData);
-
-	// Отладка (можно убрать потом)
-	if (now - lastPositionSend > 1000) {
-		console.log(
-			'Sending position:',
-			posData.x.toFixed(2),
-			posData.z.toFixed(2),
-		);
+	if (typeof socket !== 'undefined') {
+		socket.emit('player_position', {
+			x: camera.position.x,
+			y: camera.position.y,
+			z: camera.position.z,
+			yaw: playerState.yaw,
+			pitch: playerState.pitch,
+			health: playerState.health,
+			animation: currentAnim,
+		});
 	}
 }
 
-// Получение позиций других игроков
-socket.on('player_update', data => {
-	const { playerId, x, z, yaw, animation, team } = data;
-
-	if (!otherPlayers.has(playerId)) {
-		// Создаем нового игрока с правильной командой И начальной позицией
-		const playerTeam = team || gameState.selectedTeam;
-		const playerModel = createPlayerModel(playerId, playerTeam, x, z, yaw);
-		otherPlayers.set(playerId, playerModel);
-	}
-
-	const player = otherPlayers.get(playerId);
-	if (player) {
-		// Сохраняем целевую позицию для интерполяции
-		player.targetPosition = new THREE.Vector3(x, 0, z);
-		player.targetRotation = yaw;
-		player.lastUpdate = Date.now();
-
-		// При первом обновлении устанавливаем позицию сразу (если не была установлена при создании)
-		if (!player.hasInitialPosition) {
-			player.group.position.copy(player.targetPosition);
-			player.group.rotation.y = player.targetRotation;
-			player.hasInitialPosition = true;
+if (typeof socket !== 'undefined') {
+	socket.on('player_update', data => {
+		const { playerId, x, z, yaw, animation, team } = data;
+		if (!otherPlayers.has(playerId)) {
+			const playerTeam = team || gameState.selectedTeam;
+			otherPlayers.set(
+				playerId,
+				createPlayerModel(playerId, playerTeam, x, z, yaw),
+			);
 		}
-
-		// Обновляем анимацию
-		if (animation && animation !== player.currentAnimation) {
-			playAnimation(player, animation);
+		const player = otherPlayers.get(playerId);
+		if (player) {
+			player.targetPosition = new THREE.Vector3(x, 0, z);
+			player.targetRotation = yaw;
+			player.lastUpdate = Date.now();
+			if (!player.hasInitialPosition) {
+				player.group.position.copy(player.targetPosition);
+				player.group.rotation.y = player.targetRotation;
+				player.hasInitialPosition = true;
+			}
+			if (animation && animation !== player.currentAnimation)
+				playAnimation(player, animation);
 		}
-	}
-});
-
-// Удаление отключившихся игроков
-socket.on('player_disconnected', data => {
-	const player = otherPlayers.get(data.playerId);
-	if (player) {
-		scene.remove(player.group);
-		otherPlayers.delete(data.playerId);
-		console.log('Player left:', data.playerId);
-	}
-});
-
-// Получение урона от других игроков
-socket.on('player_damaged', data => {
-	const { playerId, targetId, damage } = data;
-
-	// Если урон получили мы
-	if (targetId === socket.id) {
-		playerState.health = Math.max(0, playerState.health - damage);
-		document.getElementById('health-value').textContent = Math.floor(
-			playerState.health,
-		);
-
-		// Визуальный эффект получения урона
-		const overlay = document.getElementById('damage-overlay');
-		overlay.classList.add('show');
-		setTimeout(() => overlay.classList.remove('show'), 300);
-
-		soundSystem.playHitSound();
-		console.log(
-			`💔 Received ${damage} damage from ${playerId}. Health: ${playerState.health}`,
-		);
-
-		// Проверка смерти
-		if (playerState.health <= 0) {
-			playerState.health = 0;
-			console.log('💀 You died!');
-
-			// Уведомляем сервер о смерти
-			socket.emit('player_killed', { killerId: playerId });
-
-			// Показываем экран смерти
-			const deathScreen = document.getElementById('death-screen');
-			deathScreen.classList.add('show');
-
-			// Таймер респавна
-			let respawnTime = 2;
-			const timerElement = document.getElementById('respawn-timer');
-			timerElement.textContent = respawnTime;
-
-			const countdown = setInterval(() => {
-				respawnTime--;
-				timerElement.textContent = respawnTime;
-				if (respawnTime <= 0) {
-					clearInterval(countdown);
-				}
-			}, 1000);
-
-			// Респавн через 2 секунды
-			setTimeout(() => {
-				deathScreen.classList.remove('show');
-				const spawn = getSpawnPosition();
-				camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
-				playerState.health = 100;
-				playerState.velocity.set(0, 0, 0);
-				document.getElementById('health-value').textContent = '100';
-				console.log('🔄 Respawned');
-			}, 2000);
-		}
-	}
-});
-
-// Получение уведомления об убийстве
-socket.on('player_death', data => {
-	const { playerId, killerId } = data;
-
-	console.log(`☠️ Player ${playerId} killed by ${killerId}`);
-
-	// Если мы убили игрока, добавляем очки
-	if (killerId === socket.id) {
-		let points = 100;
-
-		// Для командного режима проверяем, убили врага или союзника
-		if (gameState.selectedMap === 2) {
-			// TODO: проверить команду убитого игрока
-			// Пока даем очки за любое убийство
-			points = 100;
-		}
-
-		playerState.score += points;
-		document.getElementById('score-value').textContent = playerState.score;
-		soundSystem.playKillSound();
-		console.log(`🎯 Kill confirmed! +${points} points`);
-	}
-});
-
-// Синхронизация выстрелов
-socket.on('player_shot', data => {
-	// Показываем эффект выстрела от другого игрока
-	soundSystem.playRifleShot(); // Простой звук
-});
-
-// Получение гранаты от другого игрока
-socket.on('grenade_spawn', data => {
-	const { playerId, type, position, velocity, fuseTime } = data;
-
-	console.log(
-		`💣 Grenade spawned by ${playerId}:`,
-		type,
-		'at',
-		position.x.toFixed(2),
-		position.z.toFixed(2),
-	);
-
-	const model = type === 'frag' ? createFragGrenade() : createSmokeGrenade();
-
-	model.position.set(position.x, position.y, position.z);
-	scene.add(model);
-
-	const vel = new THREE.Vector3(velocity.x, velocity.y, velocity.z);
-
-	activeGrenades.push({
-		mesh: model,
-		type: type,
-		velocity: vel,
-		angularVel: new THREE.Vector3(
-			(Math.random() - 0.5) * 10,
-			(Math.random() - 0.5) * 10,
-			(Math.random() - 0.5) * 10,
-		),
-		fuseTime: fuseTime,
-		age: 0,
-		bounces: 0,
-		pinPulled: true,
-		isLocal: false, // Граната от другого игрока
 	});
 
-	soundSystem.playGrenadeThrow();
-});
+	socket.on('player_disconnected', data => {
+		const player = otherPlayers.get(data.playerId);
+		if (player) {
+			scene.remove(player.group);
+			otherPlayers.delete(data.playerId);
+		}
+	});
 
-// Получение взрыва гранаты от другого игрока
-socket.on('grenade_explosion', data => {
-	const { playerId, type, position } = data;
+	socket.on('player_damaged', data => {
+		if (data.targetId === socket.id) {
+			playerState.health = Math.max(0, playerState.health - data.damage);
+			const healthEl = document.getElementById('health-value');
+			if (healthEl) healthEl.textContent = Math.floor(playerState.health);
+			const overlay = document.getElementById('damage-overlay');
+			if (overlay) {
+				overlay.classList.add('show');
+				setTimeout(() => overlay.classList.remove('show'), 300);
+			}
+			soundSystem.playHitSound();
+			if (playerState.health <= 0) {
+				playerState.health = 0;
+				socket.emit('player_killed', { killerId: data.playerId });
+				const deathScreen = document.getElementById('death-screen');
+				if (deathScreen) {
+					deathScreen.classList.add('show');
+					let respawnTime = 2;
+					const timerElement = document.getElementById('respawn-timer');
+					if (timerElement) timerElement.textContent = respawnTime;
+					const countdown = setInterval(() => {
+						respawnTime--;
+						if (timerElement) timerElement.textContent = respawnTime;
+						if (respawnTime <= 0) clearInterval(countdown);
+					}, 1000);
+					setTimeout(() => {
+						deathScreen.classList.remove('show');
+						const spawn = getSpawnPosition();
+						camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
+						playerState.health = 100;
+						playerState.velocity.set(0, 0, 0);
+						if (healthEl) healthEl.textContent = '100';
+					}, 2000);
+				}
+			}
+		}
+	});
 
-	console.log(
-		`💥 Grenade exploded by ${playerId}:`,
-		type,
-		'at',
-		position.x.toFixed(2),
-		position.z.toFixed(2),
-	);
+	socket.on('player_death', data => {
+		if (data.killerId === socket.id) {
+			playerState.score += 100;
+			const scoreEl = document.getElementById('score-value');
+			if (scoreEl) scoreEl.textContent = playerState.score;
+			soundSystem.playKillSound();
+		}
+	});
 
-	const explosionPos = new THREE.Vector3(position.x, position.y, position.z);
+	socket.on('player_shot', () => soundSystem.playRifleShot());
 
-	if (type === 'frag') {
-		detonateFrag(explosionPos);
-	} else {
-		activateSmoke(explosionPos);
-	}
-});
+	socket.on('grenade_spawn', data => {
+		const model =
+			data.type === 'frag' ? createFragGrenade() : createSmokeGrenade();
+		model.position.set(data.position.x, data.position.y, data.position.z);
+		scene.add(model);
+		activeGrenades.push({
+			mesh: model,
+			type: data.type,
+			velocity: new THREE.Vector3(
+				data.velocity.x,
+				data.velocity.y,
+				data.velocity.z,
+			),
+			angularVel: new THREE.Vector3(
+				(Math.random() - 0.5) * 10,
+				(Math.random() - 0.5) * 10,
+				(Math.random() - 0.5) * 10,
+			),
+			fuseTime: data.fuseTime,
+			age: 0,
+			bounces: 0,
+			pinPulled: true,
+			isLocal: false,
+		});
+		soundSystem.playGrenadeThrow();
+	});
 
-// Очистка старых игроков (если не обновлялись 5 сек)
+	socket.on('grenade_explosion', data => {
+		const explosionPos = new THREE.Vector3(
+			data.position.x,
+			data.position.y,
+			data.position.z,
+		);
+		if (data.type === 'frag') detonateFrag(explosionPos);
+		else activateSmoke(explosionPos);
+	});
+}
+
 setInterval(() => {
 	const now = Date.now();
 	otherPlayers.forEach((player, playerId) => {
 		if (now - player.lastUpdate > 5000) {
 			scene.remove(player.group);
 			otherPlayers.delete(playerId);
-			console.log('Player timeout:', playerId);
 		}
 	});
 }, 1000);
 
-// Инициализация игры
-if (enableBots) {
-	// Манекены будут созданы автоматически при построении карты
-	console.log('Bots enabled: targets will spawn on map');
+// ============ ЕДИНАЯ ТОЧКА ВХОДА (Инициализация игры) ============
+async function initGame() {
+	try {
+		console.log('🔄 Запуск инициализации игры...');
+
+		// 1. Загружаем звуки
+		await soundSystem.initSounds();
+		console.log('✅ Звуки загружены');
+
+		// 2. Безопасное подключение к сокету
+		if (typeof socket !== 'undefined' && typeof lobbyId !== 'undefined') {
+			console.log('🔌 Joining lobby room:', lobbyId);
+			socket.emit('rejoin_game', { lobbyId });
+		} else {
+			console.log(
+				'⚠️ Мультиплеер отключен (socket/lobbyId не найдены). Одиночная игра.',
+			);
+		}
+
+		// 3. Загрузка анимаций в фоне
+		loadCharacterAnimations(() =>
+			console.log('✅ All animations loaded and ready'),
+		);
+
+		// 4. Построение карты
+		clearMap();
+		if (gameState.selectedMap === 1) {
+			buildMap1();
+			const teamScoreEl = document.getElementById('team-score');
+			if (teamScoreEl) teamScoreEl.classList.remove('show');
+		} else {
+			buildMap2();
+			const teamScoreEl = document.getElementById('team-score');
+			if (teamScoreEl) teamScoreEl.classList.add('show');
+			updateTeamScores();
+		}
+		console.log('✅ Карта построена');
+
+		// 5. Обработка ботов
+		if (typeof enableBots !== 'undefined' && !enableBots) {
+			targets.forEach(t => scene.remove(t.group));
+			targets.length = 0;
+			console.log('🤖 Боты отключены');
+		} else {
+			console.log('🤖 Боты включены');
+		}
+
+		// 6. Спавн игрока
+		const spawn = getSpawnPosition();
+		camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
+		playerState.velocity.set(0, 0, 0);
+		playerState.health = 100;
+		playerState.yaw =
+			gameState.selectedMap === 2
+				? gameState.selectedTeam === 'red'
+					? Math.PI / 2
+					: -Math.PI / 2
+				: 0;
+		playerState.pitch = 0;
+
+		const healthEl = document.getElementById('health-value');
+		if (healthEl) healthEl.textContent = '100';
+
+		setupLightsForMap(gameState.selectedMap);
+		updateAmmoDisplay();
+
+		console.log(
+			'🎮 Игра готова! Кликните по экрану для захвата курсора и начала.',
+		);
+
+		// 7. ЗАПУСК ИГРОВОГО ЦИКЛА
+		update();
+	} catch (error) {
+		console.error('❌ Критическая ошибка инициализации игры:', error);
+	}
+}
+
+// Запускаем инициализацию только после полной загрузки DOM
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', initGame);
 } else {
-	// Очищаем все цели если манекены выключены
-	console.log('Bots disabled: no targets will spawn');
+	initGame();
 }
-
-// Построить карту при загрузке
-clearMap();
-if (gameState.selectedMap === 1) {
-	buildMap1();
-	document.getElementById('team-score').classList.remove('show');
-} else {
-	buildMap2();
-	document.getElementById('team-score').classList.add('show');
-	updateTeamScores();
-}
-
-// Если манекены выключены, удаляем все targets
-if (!enableBots) {
-	targets.forEach(t => scene.remove(t.group));
-	targets.length = 0;
-}
-
-const spawn = getSpawnPosition();
-camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
-playerState.velocity.set(0, 0, 0);
-playerState.health = 100;
-playerState.yaw =
-	gameState.selectedMap === 2
-		? gameState.selectedTeam === 'red'
-			? Math.PI / 2
-			: -Math.PI / 2
-		: 0;
-playerState.pitch = 0;
-document.getElementById('health-value').textContent = '100';
-setupLightsForMap(gameState.selectedMap);
-
-update();
