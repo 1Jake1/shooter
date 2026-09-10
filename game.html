@@ -361,6 +361,29 @@
 				opacity: 1;
 			}
 
+			#zombie-ui {
+				position: absolute;
+				top: 30px;
+				left: 50%;
+				transform: translateX(-50%);
+				display: none;
+				gap: 30px;
+				align-items: center;
+				font-size: 20px;
+				font-weight: 900;
+				color: #88ff88;
+			}
+			#zombie-ui.show {
+				display: flex;
+			}
+			#zombie-ui .wave {
+				text-shadow: 0 0 10px rgba(136, 255, 136, 0.5);
+			}
+			#zombie-ui .kills {
+				color: #ff8800;
+				text-shadow: 0 0 10px rgba(255, 136, 0, 0.5);
+			}
+
 			#smoke-overlay {
 				position: fixed;
 				inset: 0;
@@ -460,6 +483,10 @@
 				<span class="vs">VS</span>
 				<span class="blue-score" id="blue-score-val">0</span>
 			</div>
+			<div id="zombie-ui">
+				<div class="wave" id="zombie-wave">Волна: 1</div>
+				<div class="kills" id="zombies-killed">Убито: 0</div>
+			</div>
 			<div id="minimap">
 				<canvas id="minimap-canvas" width="150" height="150"></canvas>
 			</div>
@@ -484,6 +511,7 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/fflate@0.7.3/umd/index.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
 		<script src="/socket.io/socket.io.js"></script>
 		<script>
 			// Получить параметры из URL

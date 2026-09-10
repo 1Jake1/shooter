@@ -5,10 +5,13 @@ const gameState = {
 	selectedMap: selectedMap,
 	selectedTeam: selectedTeam,
 	teamScores: { red: 0, blue: 0 },
+	zombieWave: 1,
+	zombiesKilled: 0,
 };
 
 const CONFIG = {
 	mapSize: 60,
+	zombieMapSize: 120,
 	wallHeight: 4,
 	wallThickness: 0.5,
 	playerHeight: 1.7,
@@ -18,6 +21,14 @@ const CONFIG = {
 	jumpForce: 8,
 	gravity: 20,
 	mouseSensitivity: 0.002,
+	zombie: {
+		health: 100,
+		damage: 15,
+		speed: 3.5,
+		attackRange: 2,
+		attackCooldown: 1000,
+		detectionRange: 30,
+	},
 	weapons: {
 		pistol: {
 			name: 'ПИСТОЛЕТ',
@@ -523,8 +534,9 @@ const blueMat = new THREE.MeshStandardMaterial({
 
 const walls = [],
 	targets = [],
-	mapObjects = [];
-const mapHalf = CONFIG.mapSize / 2;
+	mapObjects = [],
+	zombies = [];
+let mapHalf = CONFIG.mapSize / 2;
 
 function clearMap() {
 	walls.length = 0;
@@ -739,6 +751,134 @@ function buildMap2() {
 	].forEach(([x, z]) => createTarget(x, z, 'red'));
 }
 
+function buildMap3() {
+	mapHalf = CONFIG.zombieMapSize / 2;
+
+	const floor = new THREE.Mesh(
+		new THREE.PlaneGeometry(CONFIG.zombieMapSize, CONFIG.zombieMapSize),
+		floorMat,
+	);
+	floor.rotation.x = -Math.PI / 2;
+	floor.receiveShadow = true;
+	scene.add(floor);
+	mapObjects.push(floor);
+
+	scene.background = new THREE.Color(0x334455);
+	scene.fog = new THREE.FogExp2(0x334455, 0.008);
+
+	const T = CONFIG.wallThickness,
+		S = mapHalf;
+	addWall(0, -S, CONFIG.zombieMapSize, T);
+	addWall(0, S, CONFIG.zombieMapSize, T);
+	addWall(-S, 0, T, CONFIG.zombieMapSize);
+	addWall(S, 0, T, CONFIG.zombieMapSize);
+
+	// Центральное укрепление
+	addWall(0, 0, 20, T, 3);
+	addWall(0, 10, T, 10, 3);
+	addWall(0, -10, T, 10, 3);
+	addWall(-10, 5, 10, T, 3);
+	addWall(10, 5, 10, T, 3);
+	addWall(-10, -5, 10, T, 3);
+	addWall(10, -5, 10, T, 3);
+
+	// Платформы и укрытия с разной высотой
+	addWall(-25, -25, 8, 8, 2);
+	addWall(25, -25, 8, 8, 2);
+	addWall(-25, 25, 8, 8, 2);
+	addWall(25, 25, 8, 8, 2);
+
+	// Высокие платформы
+	const platform1 = new THREE.Mesh(
+		new THREE.BoxGeometry(10, 1, 10),
+		new THREE.MeshStandardMaterial({
+			color: 0x666666,
+			roughness: 0.8,
+			metalness: 0.3,
+		}),
+	);
+	platform1.position.set(-35, 3, 0);
+	platform1.castShadow = true;
+	platform1.receiveShadow = true;
+	scene.add(platform1);
+	mapObjects.push(platform1);
+
+	const platform2 = new THREE.Mesh(
+		new THREE.BoxGeometry(10, 1, 10),
+		new THREE.MeshStandardMaterial({
+			color: 0x666666,
+			roughness: 0.8,
+			metalness: 0.3,
+		}),
+	);
+	platform2.position.set(35, 3, 0);
+	platform2.castShadow = true;
+	platform2.receiveShadow = true;
+	scene.add(platform2);
+	mapObjects.push(platform2);
+
+	// Рампы для подъема
+	const ramp1 = new THREE.Mesh(
+		new THREE.BoxGeometry(6, 0.5, 8),
+		new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 }),
+	);
+	ramp1.position.set(-30, 1.5, 0);
+	ramp1.rotation.z = -0.35;
+	ramp1.castShadow = true;
+	ramp1.receiveShadow = true;
+	scene.add(ramp1);
+	mapObjects.push(ramp1);
+
+	const ramp2 = new THREE.Mesh(
+		new THREE.BoxGeometry(6, 0.5, 8),
+		new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 }),
+	);
+	ramp2.position.set(30, 1.5, 0);
+	ramp2.rotation.z = 0.35;
+	ramp2.castShadow = true;
+	ramp2.receiveShadow = true;
+	scene.add(ramp2);
+	mapObjects.push(ramp2);
+
+	// Колонны разной высоты
+	for (let i = 0; i < 12; i++) {
+		const angle = (i / 12) * Math.PI * 2;
+		const radius = 40;
+		const x = Math.cos(angle) * radius;
+		const z = Math.sin(angle) * radius;
+		const height = 2 + Math.random() * 4;
+		const pillar = new THREE.Mesh(
+			new THREE.BoxGeometry(2, height, 2),
+			pillarMat,
+		);
+		pillar.position.set(x, height / 2, z);
+		pillar.castShadow = true;
+		pillar.receiveShadow = true;
+		scene.add(pillar);
+		walls.push({ mesh: pillar, x, z, w: 2, d: 2, h: height });
+		mapObjects.push(pillar);
+	}
+
+	// Освещение для режима зомби
+	const moonLight = new THREE.DirectionalLight(0x8899dd, 0.5);
+	moonLight.position.set(-20, 40, 20);
+	moonLight.castShadow = true;
+	moonLight.shadow.mapSize.set(4096, 4096);
+	moonLight.shadow.camera.left = -70;
+	moonLight.shadow.camera.right = 70;
+	moonLight.shadow.camera.top = 70;
+	moonLight.shadow.camera.bottom = -70;
+	scene.add(moonLight);
+	mapObjects.push(moonLight);
+
+	// Точечное освещение в центре
+	const centerLight = new THREE.PointLight(0xffffaa, 2, 40);
+	centerLight.position.set(0, 5, 0);
+	centerLight.castShadow = true;
+	scene.add(centerLight);
+	mapObjects.push(centerLight);
+}
+
 function createTarget(x, z, team) {
 	const g = new THREE.Group();
 	let mat = targetMat;
@@ -805,7 +945,7 @@ function getSpawnPosition() {
 			{ x: 0, z: 20 },
 		];
 		return spawns[Math.floor(Math.random() * spawns.length)];
-	} else {
+	} else if (gameState.selectedMap === 2) {
 		if (gameState.selectedTeam === 'red')
 			return {
 				x: -22 + (Math.random() - 0.5) * 4,
@@ -816,6 +956,12 @@ function getSpawnPosition() {
 				x: 22 + (Math.random() - 0.5) * 4,
 				z: (Math.random() - 0.5) * 8,
 			};
+	} else {
+		// Карта 3 - зомби режим
+		return {
+			x: (Math.random() - 0.5) * 10,
+			z: (Math.random() - 0.5) * 10,
+		};
 	}
 }
 
@@ -1921,6 +2067,17 @@ function shoot() {
 		});
 	});
 
+	// Проверка попадания по зомби
+	zombies.forEach(zombie => {
+		if (zombie.alive) {
+			zombie.group.traverse(child => {
+				if (child.isMesh) {
+					targetMeshes.push({ mesh: child, zombie: zombie, type: 'zombie' });
+				}
+			});
+		}
+	});
+
 	const intersects = raycaster.intersectObjects(
 		targetMeshes.map(tm => tm.mesh),
 	);
@@ -1937,6 +2094,35 @@ function shoot() {
 						targetId: td.playerId,
 						damage: dmg,
 						position: hitPoint,
+					});
+				}
+				hitTarget = true;
+			} else if (td.type === 'zombie') {
+				const z = td.zombie;
+				let dmg = cfg.damage;
+				const hitPoint = intersects[0].point;
+				if (hitPoint.y > z.group.position.y + 1.5) dmg *= 2.0; // Хедшот
+				z.health -= dmg;
+				z.hitTime = performance.now();
+				soundSystem.playHitSound();
+				if (z.health <= 0) {
+					z.alive = false;
+					gameState.zombiesKilled++;
+					playerState.score += 50;
+					const scoreEl = document.getElementById('score-value');
+					if (scoreEl) scoreEl.textContent = playerState.score;
+					soundSystem.playKillSound();
+					playZombieAnimation(z, 'death');
+					z.group.traverse(child => {
+						if (child.isMesh && child.material) {
+							child.material.transparent = true;
+							setTimeout(() => {
+								const fadeOut = setInterval(() => {
+									child.material.opacity -= 0.02;
+									if (child.material.opacity <= 0) clearInterval(fadeOut);
+								}, 50);
+							}, 2000);
+						}
 					});
 				}
 				hitTarget = true;
@@ -2071,8 +2257,380 @@ function checkCollision(newX, newZ) {
 		)
 			return true;
 	}
-	if (Math.abs(newX) > mapHalf - r || Math.abs(newZ) > mapHalf - r) return true;
+	const currentMapSize =
+		gameState.selectedMap === 3 ? CONFIG.zombieMapSize : CONFIG.mapSize;
+	const currentMapHalf = currentMapSize / 2;
+	if (
+		Math.abs(newX) > currentMapHalf - r ||
+		Math.abs(newZ) > currentMapHalf - r
+	)
+		return true;
 	return false;
+}
+
+// ============ ZOMBIE SYSTEM ============
+const zombieAnimations = {};
+let zombieModelTemplate = null;
+
+function loadZombieModel(callback) {
+	console.log('🧟 Starting zombie model load from: models/Zombie.fbx');
+	fbxLoader.load(
+		'models/Zombie.fbx',
+		fbx => {
+			console.log('✅ Zombie FBX loaded successfully:', fbx);
+			const box = new THREE.Box3().setFromObject(fbx);
+			const size = new THREE.Vector3();
+			box.getSize(size);
+			console.log('📦 Original zombie size:', size);
+
+			const targetHeight = 1.8;
+			const scale = size.y > 0 ? (targetHeight / size.y) * 1.32 : 0.01;
+			fbx.scale.setScalar(scale);
+			console.log('📏 Applied scale:', scale);
+
+			const scaledBox = new THREE.Box3().setFromObject(fbx);
+			const center = new THREE.Vector3();
+			scaledBox.getCenter(center);
+			fbx.position.x -= center.x;
+			fbx.position.z -= center.z;
+			const finalBox = new THREE.Box3().setFromObject(fbx);
+			fbx.position.y -= finalBox.min.y;
+			fbx.rotation.y = Math.PI;
+			console.log('📍 Final zombie position:', fbx.position);
+
+			fbx.traverse(child => {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					if (child.material) {
+						child.material = child.material.clone();
+						child.material.color.setHex(0x446644);
+						child.material.emissive.setHex(0x112211);
+						child.material.emissiveIntensity = 0.3;
+					}
+					console.log('🎨 Configured zombie mesh:', child.name);
+				}
+			});
+
+			zombieModelTemplate = fbx;
+			console.log('✅ Zombie model template saved');
+			callback(fbx);
+		},
+		xhr => {
+			console.log(
+				'📥 Zombie model loading:',
+				((xhr.loaded / xhr.total) * 100).toFixed(2) + '%',
+			);
+		},
+		error => {
+			console.error('❌ Ошибка загрузки модели зомби:', error);
+			console.error('Путь: models/Zombie.fbx');
+		},
+	);
+}
+
+function loadZombieAnimations(callback) {
+	let loaded = 0;
+	const animFiles = {
+		idle: 'models/Anim_Zombie-IDLE.fbx',
+		run: 'models/Anim_Zombie-Run.fbx',
+		attack: 'models/Anim_Zombie-Attack.fbx',
+		death: 'models/Anim_Zombie-Death.fbx',
+	};
+
+	console.log('🎬 Loading zombie animations:', Object.keys(animFiles));
+
+	Object.keys(animFiles).forEach(key => {
+		fbxLoader.load(
+			animFiles[key],
+			fbx => {
+				if (fbx.animations && fbx.animations.length > 0) {
+					zombieAnimations[key] = fbx.animations[0];
+					console.log(
+						`✅ Loaded zombie animation: ${key} (${fbx.animations[0].tracks.length} tracks)`,
+					);
+				} else {
+					console.warn(`⚠️ No animations found in: ${animFiles[key]}`);
+				}
+				loaded++;
+				if (loaded === Object.keys(animFiles).length) {
+					console.log(
+						'✅ All zombie animations loaded:',
+						Object.keys(zombieAnimations),
+					);
+					callback();
+				}
+			},
+			xhr => {
+				console.log(
+					`📥 ${key}:`,
+					((xhr.loaded / xhr.total) * 100).toFixed(2) + '%',
+				);
+			},
+			error => {
+				console.error(`❌ Error loading zombie animation ${key}:`, error);
+				loaded++;
+				if (loaded === Object.keys(animFiles).length) callback();
+			},
+		);
+	});
+}
+
+function createZombie(x, z) {
+	if (!zombieModelTemplate) {
+		console.error('❌ Zombie model template not loaded yet!');
+		return null;
+	}
+
+	const group = new THREE.Group();
+	group.position.set(x, 0, z);
+
+	// Клонируем модель с deep clone
+	const model = THREE.SkeletonUtils.clone(zombieModelTemplate);
+
+	// Позиционируем модель внутри группы
+	const box = new THREE.Box3().setFromObject(model);
+	model.position.y = -box.min.y;
+	model.rotation.y = Math.PI;
+
+	// Применяем материалы
+	model.traverse(child => {
+		if (child.isMesh) {
+			if (child.material) {
+				child.material = child.material.clone();
+				child.material.color.setHex(0x668844);
+				child.material.emissive.setHex(0x223311);
+				child.material.emissiveIntensity = 0.4;
+			}
+		}
+	});
+
+	group.add(model);
+	scene.add(group);
+
+	// Создаем миксер для анимаций
+	const mixer = new THREE.AnimationMixer(model);
+	const animations = {};
+
+	// Привязываем анимации
+	if (Object.keys(zombieAnimations).length > 0) {
+		Object.keys(zombieAnimations).forEach(key => {
+			const action = mixer.clipAction(zombieAnimations[key]);
+			animations[key] = action;
+			if (key === 'idle') {
+				action.play();
+			}
+		});
+	}
+
+	const zombie = {
+		group,
+		model,
+		mixer,
+		animations,
+		currentAnimation: 'idle',
+		health: CONFIG.zombie.health,
+		alive: true,
+		lastAttack: 0,
+		targetPlayer: null,
+		hitTime: 0,
+	};
+
+	zombies.push(zombie);
+	console.log('✅ Zombie created at', x, z, '- total zombies:', zombies.length);
+	return zombie;
+}
+
+function playZombieAnimation(zombie, animName) {
+	if (!zombie.mixer || !zombie.animations) return;
+	const newAnim = zombie.animations[animName];
+	if (!newAnim || zombie.currentAnimation === animName) return;
+	if (zombie.currentAnimation && zombie.animations[zombie.currentAnimation]) {
+		zombie.animations[zombie.currentAnimation].fadeOut(0.2);
+	}
+	newAnim.reset().fadeIn(0.2).play();
+	zombie.currentAnimation = animName;
+}
+
+function spawnZombieWave() {
+	if (gameState.selectedMap !== 3) {
+		console.warn('Not in zombie mode, skipping wave spawn');
+		return;
+	}
+
+	if (!zombieModelTemplate) {
+		console.error('❌ Cannot spawn zombies: model not loaded');
+		return;
+	}
+
+	const count = 5 + gameState.zombieWave * 2;
+	const spawnRadius = 55;
+	let spawned = 0;
+
+	for (let i = 0; i < count; i++) {
+		const angle = (i / count) * Math.PI * 2;
+		const x = Math.cos(angle) * spawnRadius;
+		const z = Math.sin(angle) * spawnRadius;
+		const zombie = createZombie(x, z);
+		if (zombie) spawned++;
+	}
+
+	console.log(
+		`🧟 Волна ${gameState.zombieWave}: ${spawned}/${count} зомби заспавнено`,
+	);
+}
+
+function updateZombies(dt) {
+	if (gameState.selectedMap !== 3) return;
+
+	const playerPos = camera.position;
+	let aliveCount = 0;
+
+	for (let i = zombies.length - 1; i >= 0; i--) {
+		const zombie = zombies[i];
+
+		if (zombie.mixer) {
+			zombie.mixer.update(dt);
+		}
+
+		if (!zombie.alive) {
+			// Удаляем мертвых зомби через 3 секунды
+			if (performance.now() - zombie.hitTime > 3000) {
+				scene.remove(zombie.group);
+				zombies.splice(i, 1);
+				console.log('🗑️ Removed dead zombie, remaining:', zombies.length);
+			}
+			continue;
+		}
+
+		aliveCount++;
+
+		// AI: движение к игроку
+		const dx = playerPos.x - zombie.group.position.x;
+		const dz = playerPos.z - zombie.group.position.z;
+		const dist = Math.sqrt(dx * dx + dz * dz);
+
+		if (dist < CONFIG.zombie.detectionRange) {
+			const angle = Math.atan2(dx, dz);
+			zombie.group.rotation.y = angle;
+
+			if (dist > CONFIG.zombie.attackRange) {
+				// Движение к игроку
+				const dirX = dx / dist;
+				const dirZ = dz / dist;
+				const newX = zombie.group.position.x + dirX * CONFIG.zombie.speed * dt;
+				const newZ = zombie.group.position.z + dirZ * CONFIG.zombie.speed * dt;
+
+				// Проверка коллизий
+				if (!checkZombieCollision(newX, newZ)) {
+					zombie.group.position.x = newX;
+					zombie.group.position.z = newZ;
+				}
+
+				playZombieAnimation(zombie, 'run');
+			} else {
+				// Атака
+				playZombieAnimation(zombie, 'attack');
+				const now = performance.now();
+				if (now - zombie.lastAttack > CONFIG.zombie.attackCooldown) {
+					zombie.lastAttack = now;
+					playerState.health = Math.max(
+						0,
+						playerState.health - CONFIG.zombie.damage,
+					);
+					const healthEl = document.getElementById('health-value');
+					if (healthEl) healthEl.textContent = Math.floor(playerState.health);
+					const overlay = document.getElementById('damage-overlay');
+					if (overlay) {
+						overlay.classList.add('show');
+						setTimeout(() => overlay.classList.remove('show'), 300);
+					}
+					soundSystem.playHitSound();
+
+					if (playerState.health <= 0) {
+						handlePlayerDeath();
+					}
+				}
+			}
+		} else {
+			playZombieAnimation(zombie, 'idle');
+		}
+
+		// Визуальная реакция на попадание
+		if (performance.now() - zombie.hitTime < 200) {
+			const ht = (performance.now() - zombie.hitTime) / 200;
+			zombie.group.position.y = Math.sin(ht * Math.PI) * 0.1;
+		} else {
+			zombie.group.position.y *= 0.9;
+		}
+	}
+	if (aliveCount === 0 && zombies.length === 0 && gameState.zombieWave !== 1) {
+		// Спавн новой волны - только если все зомби мертвы
+		// gameState.zombieWave++;
+		console.log(`📈 Wave completed! Starting wave ${gameState.zombieWave}`);
+		setTimeout(() => spawnZombieWave(), 3000);
+	}
+
+	// Обновление UI
+	const waveEl = document.getElementById('zombie-wave');
+	if (waveEl) waveEl.textContent = `Волна: ${gameState.zombieWave}`;
+	const killsEl = document.getElementById('zombies-killed');
+	if (killsEl) killsEl.textContent = `Убито: ${gameState.zombiesKilled}`;
+}
+
+function checkZombieCollision(x, z) {
+	const r = 0.5;
+	for (const wall of walls) {
+		const halfW = wall.w / 2 + r;
+		const halfD = wall.d / 2 + r;
+		if (
+			x > wall.x - halfW &&
+			x < wall.x + halfW &&
+			z > wall.z - halfD &&
+			z < wall.z + halfD
+		)
+			return true;
+	}
+	const currentMapSize =
+		gameState.selectedMap === 3 ? CONFIG.zombieMapSize : CONFIG.mapSize;
+	const half = currentMapSize / 2;
+	if (Math.abs(x) > half - r || Math.abs(z) > half - r) return true;
+	return false;
+}
+
+function handlePlayerDeath() {
+	const deathScreen = document.getElementById('death-screen');
+	if (deathScreen) {
+		deathScreen.classList.add('show');
+		let respawnTime = 5;
+		const timerElement = document.getElementById('respawn-timer');
+		if (timerElement) timerElement.textContent = respawnTime;
+		const countdown = setInterval(() => {
+			respawnTime--;
+			if (timerElement) timerElement.textContent = respawnTime;
+			if (respawnTime <= 0) clearInterval(countdown);
+		}, 1000);
+		setTimeout(() => {
+			deathScreen.classList.remove('show');
+			const spawn = getSpawnPosition();
+			camera.position.set(spawn.x, CONFIG.playerHeight, spawn.z);
+			playerState.health = 100;
+			playerState.velocity.set(0, 0, 0);
+			const healthEl = document.getElementById('health-value');
+			if (healthEl) healthEl.textContent = '100';
+
+			// ВАЖНО: Полный сброс зомби-режима при смерти
+			if (gameState.selectedMap === 3) {
+				console.log('💀 Player died - resetting zombie mode');
+				zombies.forEach(z => scene.remove(z.group));
+				zombies.length = 0;
+				gameState.zombieWave = 1;
+				gameState.zombiesKilled = 0;
+				// Небольшая задержка перед спавном первой волны
+				// setTimeout(() => spawnZombieWave(), 2000);
+			}
+		}, 5000);
+	}
 }
 
 const minimapCanvas = document.getElementById('minimap-canvas');
@@ -2083,29 +2641,32 @@ function drawMinimap() {
 	const ctx = minimapCtx;
 	const w = 150,
 		h = 150;
-	const scale = w / CONFIG.mapSize;
+	const currentMapSize =
+		gameState.selectedMap === 3 ? CONFIG.zombieMapSize : CONFIG.mapSize;
+	const scale = w / currentMapSize;
+	const currentMapHalf = currentMapSize / 2;
 	ctx.fillStyle = 'rgba(0,0,0,0.8)';
 	ctx.fillRect(0, 0, w, h);
 	if (gameState.selectedMap === 2) {
 		ctx.fillStyle = 'rgba(255,68,68,0.2)';
 		ctx.fillRect(
-			(-mapHalf - 26 + mapHalf) * scale,
-			(-7 + mapHalf) * scale,
+			(-currentMapHalf - 26 + currentMapHalf) * scale,
+			(-7 + currentMapHalf) * scale,
 			8 * scale,
 			14 * scale,
 		);
 		ctx.fillStyle = 'rgba(68,136,255,0.2)';
 		ctx.fillRect(
-			(18 + mapHalf) * scale,
-			(-7 + mapHalf) * scale,
+			(18 + currentMapHalf) * scale,
+			(-7 + currentMapHalf) * scale,
 			8 * scale,
 			14 * scale,
 		);
 	}
 	ctx.fillStyle = '#555';
 	walls.forEach(wall => {
-		const x = (wall.x + mapHalf) * scale,
-			z = (wall.z + mapHalf) * scale;
+		const x = (wall.x + currentMapHalf) * scale,
+			z = (wall.z + currentMapHalf) * scale;
 		ctx.fillRect(
 			x - (wall.w * scale) / 2,
 			z - (wall.d * scale) / 2,
@@ -2114,12 +2675,29 @@ function drawMinimap() {
 		);
 	});
 
+	// Зомби на миникарте
+	if (gameState.selectedMap === 3) {
+		zombies.forEach(z => {
+			if (!z.alive) return;
+			ctx.fillStyle = '#88ff88';
+			ctx.beginPath();
+			ctx.arc(
+				(z.group.position.x + currentMapHalf) * scale,
+				(z.group.position.z + currentMapHalf) * scale,
+				3,
+				0,
+				Math.PI * 2,
+			);
+			ctx.fill();
+		});
+	}
+
 	otherPlayers.forEach(player => {
 		ctx.fillStyle = '#ffff00';
 		ctx.beginPath();
 		ctx.arc(
-			(player.group.position.x + mapHalf) * scale,
-			(player.group.position.z + mapHalf) * scale,
+			(player.group.position.x + currentMapHalf) * scale,
+			(player.group.position.z + currentMapHalf) * scale,
 			4,
 			0,
 			Math.PI * 2,
@@ -2134,8 +2712,8 @@ function drawMinimap() {
 		else ctx.fillStyle = '#ffaa44';
 		ctx.beginPath();
 		ctx.arc(
-			(t.x + mapHalf) * scale,
-			(t.z + mapHalf) * scale,
+			(t.x + currentMapHalf) * scale,
+			(t.z + currentMapHalf) * scale,
 			3,
 			0,
 			Math.PI * 2,
@@ -2146,8 +2724,8 @@ function drawMinimap() {
 		ctx.fillStyle = g.type === 'frag' ? '#ffaa00' : '#88bbff';
 		ctx.beginPath();
 		ctx.arc(
-			(g.mesh.position.x + mapHalf) * scale,
-			(g.mesh.position.z + mapHalf) * scale,
+			(g.mesh.position.x + currentMapHalf) * scale,
+			(g.mesh.position.z + currentMapHalf) * scale,
 			3,
 			0,
 			Math.PI * 2,
@@ -2158,16 +2736,16 @@ function drawMinimap() {
 		ctx.fillStyle = 'rgba(200,200,200,0.4)';
 		ctx.beginPath();
 		ctx.arc(
-			(c.position.x + mapHalf) * scale,
-			(c.position.z + mapHalf) * scale,
+			(c.position.x + currentMapHalf) * scale,
+			(c.position.z + currentMapHalf) * scale,
 			c.maxRadius * scale,
 			0,
 			Math.PI * 2,
 		);
 		ctx.fill();
 	});
-	const px = (camera.position.x + mapHalf) * scale,
-		pz = (camera.position.z + mapHalf) * scale;
+	const px = (camera.position.x + currentMapHalf) * scale,
+		pz = (camera.position.z + currentMapHalf) * scale;
 	ctx.fillStyle =
 		gameState.selectedMap === 2
 			? gameState.selectedTeam === 'red'
@@ -2660,6 +3238,7 @@ function update() {
 	}
 
 	updateSmokeClouds(dt);
+	updateZombies(dt);
 
 	otherPlayers.forEach(player => {
 		if (player.targetPosition) {
@@ -3036,8 +3615,21 @@ async function initGame() {
 
 		// 3. Загрузка анимаций в фоне
 		loadCharacterAnimations(() =>
-			console.log('✅ All animations loaded and ready'),
+			console.log('✅ All character animations loaded and ready'),
 		);
+
+		// 3.1 Загрузка зомби для режима 3
+		if (gameState.selectedMap === 3) {
+			console.log('🧟 Loading zombie assets...');
+			loadZombieModel(() => {
+				console.log('✅ Zombie model loaded');
+				loadZombieAnimations(() => {
+					console.log('✅ Zombie animations loaded');
+					console.log('🧟 Spawning first wave...');
+					setTimeout(() => spawnZombieWave(), 1000);
+				});
+			});
+		}
 
 		// 4. Построение карты
 		clearMap();
@@ -3045,11 +3637,28 @@ async function initGame() {
 			buildMap1();
 			const teamScoreEl = document.getElementById('team-score');
 			if (teamScoreEl) teamScoreEl.classList.remove('show');
-		} else {
+			const zombieUIEl = document.getElementById('zombie-ui');
+			if (zombieUIEl) zombieUIEl.classList.remove('show');
+		} else if (gameState.selectedMap === 2) {
 			buildMap2();
 			const teamScoreEl = document.getElementById('team-score');
 			if (teamScoreEl) teamScoreEl.classList.add('show');
 			updateTeamScores();
+			const zombieUIEl = document.getElementById('zombie-ui');
+			if (zombieUIEl) zombieUIEl.classList.remove('show');
+		} else if (gameState.selectedMap === 3) {
+			buildMap3();
+			const teamScoreEl = document.getElementById('team-score');
+			if (teamScoreEl) teamScoreEl.classList.remove('show');
+			const zombieUIEl = document.getElementById('zombie-ui');
+			if (zombieUIEl) zombieUIEl.classList.add('show');
+
+			// ВАЖНО: Сброс состояния зомби-режима
+			gameState.zombieWave = 1;
+			gameState.zombiesKilled = 0;
+			zombies.forEach(z => scene.remove(z.group));
+			zombies.length = 0;
+			console.log('🔄 Zombie mode reset: wave 1, kills 0');
 		}
 		console.log('✅ Карта построена');
 
